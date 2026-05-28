@@ -10,6 +10,7 @@ import Groups from './views/Groups';
 import News from './views/News';
 import Employees from './views/Employees';
 import Attendance from './views/Attendance';
+import DeviceAccess from './views/DeviceAccess';
 
 function App() {
   return (
@@ -41,6 +42,9 @@ function App() {
 
         {/* Attendance data base */}
         <Route path="/attendance" element={<Attendance />} />
+
+        {/* Accesos privados */}
+        <Route path="/device-access" element={<DeviceAccess />} />
         
         
       </Routes>

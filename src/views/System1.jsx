@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   ClipboardCheck,
   BarChart3,
@@ -9,10 +8,13 @@ import {
   ShieldCheck,
   UserCheck,
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+
+const SYSTEM_NAME = 'system1';
+const SYSTEM_LABEL = 'System 1';
+const SYSTEM_AUTH_PIN = '4581'; // Cambia este PIN si quieres otro para autorizar la PC de System 1
 
 export default function System1() {
-  const navigate = useNavigate();
-
   const [activeTab, setActiveTab] = useState('Home');
 
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -31,6 +33,95 @@ export default function System1() {
     minute: '2-digit',
     second: '2-digit',
   });
+
+  // DEVICE AUTHORIZATION
+  const [deviceToken, setDeviceToken] = useState('');
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [authPin, setAuthPin] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  useEffect(() => {
+    const verifyDevice = async () => {
+      try {
+        let token = localStorage.getItem(`${SYSTEM_NAME}_device_token`);
+
+        if (!token) {
+          token = crypto.randomUUID();
+          localStorage.setItem(`${SYSTEM_NAME}_device_token`, token);
+        }
+
+        setDeviceToken(token);
+
+        const { data, error } = await supabase
+          .from('device_authorizations')
+          .select('id, system_name, device_token, is_active')
+          .eq('system_name', SYSTEM_NAME)
+          .eq('device_token', token)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Device verification error:', error);
+          setIsAuthorized(false);
+          return;
+        }
+
+        setIsAuthorized(Boolean(data));
+      } catch (error) {
+        console.error('Unexpected authorization error:', error);
+        setIsAuthorized(false);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    verifyDevice();
+  }, []);
+
+  const authorizeThisDevice = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+
+    if (authPin.trim() !== SYSTEM_AUTH_PIN) {
+      setAuthError('Invalid authorization PIN.');
+      return;
+    }
+
+    try {
+      let token = deviceToken || localStorage.getItem(`${SYSTEM_NAME}_device_token`);
+
+      if (!token) {
+        token = crypto.randomUUID();
+        localStorage.setItem(`${SYSTEM_NAME}_device_token`, token);
+        setDeviceToken(token);
+      }
+
+      const { error } = await supabase
+        .from('device_authorizations')
+        .upsert(
+          {
+            system_name: SYSTEM_NAME,
+            device_token: token,
+            device_label: `${SYSTEM_LABEL} Authorized PC`,
+            is_active: true,
+          },
+          { onConflict: 'device_token' }
+        );
+
+      if (error) {
+        console.error('Device authorization error:', error);
+        setAuthError('Unable to authorize this device. Check Supabase connection.');
+        return;
+      }
+
+      setIsAuthorized(true);
+      setAuthPin('');
+    } catch (error) {
+      console.error('Unexpected authorization error:', error);
+      setAuthError('Unexpected error while authorizing this device.');
+    }
+  };
 
   const handleTabChange = (tabName) => {
   setActiveTab(tabName);
@@ -339,6 +430,180 @@ export default function System1() {
     'Rules',
   ];
 
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          backgroundColor: '#0f172a',
+          color: '#fff',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '1.1rem',
+          fontWeight: '700',
+        }}
+      >
+        Verifying authorized device...
+      </div>
+    );
+  }
+
+  if (!isAuthorized) {
+    return (
+      <div
+        style={{
+          backgroundColor: '#0f172a',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: 'system-ui, sans-serif',
+          padding: '24px',
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '430px',
+            backgroundColor: '#1e293b',
+            border: '1px solid #334155',
+            borderRadius: '14px',
+            padding: '32px',
+            boxShadow: '0 12px 30px rgba(0,0,0,0.35)',
+            color: '#f8fafc',
+          }}
+        >
+          <div style={{ textAlign: 'center', marginBottom: '26px' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '54px',
+                height: '54px',
+                borderRadius: '12px',
+                backgroundColor: '#dc2626',
+                color: '#fff',
+                fontWeight: '900',
+                fontSize: '1.4rem',
+                marginBottom: '14px',
+              }}
+            >
+              1
+            </div>
+
+            <h1
+              style={{
+                margin: 0,
+                fontSize: '1.45rem',
+                fontWeight: '900',
+              }}
+            >
+              System 1 Authorization
+            </h1>
+
+            <p
+              style={{
+                margin: '8px 0 0 0',
+                color: '#94a3b8',
+                fontSize: '0.9rem',
+                lineHeight: '1.5',
+              }}
+            >
+              This PC is not authorized yet. Enter the System 1 PIN once to lock this workstation to this device.
+            </p>
+          </div>
+
+          <form onSubmit={authorizeThisDevice}>
+            <label
+              style={{
+                display: 'block',
+                color: '#cbd5e1',
+                fontSize: '0.85rem',
+                fontWeight: '700',
+                marginBottom: '8px',
+              }}
+            >
+              Authorization PIN
+            </label>
+
+            <input
+              type="password"
+              value={authPin}
+              onChange={(e) => setAuthPin(e.target.value)}
+              placeholder="Enter System 1 PIN"
+              autoFocus
+              style={{
+                width: '100%',
+                backgroundColor: '#0f172a',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '12px',
+                color: '#f8fafc',
+                fontSize: '1rem',
+                outline: 'none',
+                boxSizing: 'border-box',
+                marginBottom: '14px',
+              }}
+            />
+
+            {authError && (
+              <div
+                style={{
+                  backgroundColor: '#7f1d1d',
+                  border: '1px solid #ef4444',
+                  color: '#fee2e2',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  marginBottom: '14px',
+                  fontSize: '0.86rem',
+                  fontWeight: '700',
+                }}
+              >
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              style={{
+                width: '100%',
+                backgroundColor: '#dc2626',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '12px',
+                fontWeight: '900',
+                fontSize: '0.95rem',
+                cursor: 'pointer',
+              }}
+            >
+              Authorize This PC
+            </button>
+          </form>
+
+          <div
+            style={{
+              marginTop: '18px',
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: '#0f172a',
+              border: '1px solid #334155',
+              color: '#94a3b8',
+              fontSize: '0.75rem',
+              lineHeight: '1.5',
+              wordBreak: 'break-all',
+            }}
+          >
+            Device Token: {deviceToken || 'Generating...'}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -388,23 +653,6 @@ export default function System1() {
       </div>
 
       <div style={{ padding: '32px 24px', maxWidth: '1200px', margin: '0 auto' }}>
-        <button
-          onClick={() => navigate('/home')}
-          style={{
-            backgroundColor: '#fff',
-            border: '1px solid #cbd5e1',
-            padding: '8px 16px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            marginBottom: '24px',
-            fontSize: '0.9rem',
-            fontWeight: '500',
-            color: '#334155',
-          }}
-        >
-          ← Back to Dashboard
-        </button>
-
         {/* Pestañas */}
         <div
           style={{

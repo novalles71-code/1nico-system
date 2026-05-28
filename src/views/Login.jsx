@@ -8,6 +8,7 @@ const VALID_PASSWORD = 'noelik05';
 
 export default function Login() {
   const navigate = useNavigate();
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -16,7 +17,13 @@ export default function Login() {
 
     // Validación de tus credenciales
     if (username === VALID_USERNAME && password === VALID_PASSWORD) {
+
+      // GUARDA SESIÓN ADMIN
+      localStorage.setItem('isAdminLoggedIn', 'true');
+
+      // REDIRIGE AL DASHBOARD
       navigate('/home');
+
     } else {
       alert('Invalid username or password');
     }
@@ -24,7 +31,7 @@ export default function Login() {
 
   return (
     <div style={{
-      backgroundColor: '#0f172a', 
+      backgroundColor: '#0f172a',
       minHeight: '100vh',
       display: 'flex',
       justifyContent: 'center',
@@ -41,31 +48,62 @@ export default function Login() {
         maxWidth: '400px',
         boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
       }}>
-        
+
         {/* Encabezado limpio: Solo Logo y Título */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{
-            fontSize: '2rem', 
-            fontWeight: '800', 
+            fontSize: '2rem',
+            fontWeight: '800',
             color: '#ffffff',
             letterSpacing: '-1px',
             marginBottom: '4px'
           }}>
             1NICO
           </div>
-          <h2 style={{ fontSize: '1.25rem', color: '#f8fafc', margin: 0, fontWeight: '600' }}>Internal System</h2>
+
+          <h2 style={{
+            fontSize: '1.25rem',
+            color: '#f8fafc',
+            margin: 0,
+            fontWeight: '600'
+          }}>
+            Internal System
+          </h2>
         </div>
 
         {/* Formulario */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px'
+          }}
+        >
+
           {/* Campo Usuario */}
           <div>
-            <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.85rem', marginBottom: '6px' }}>Username</label>
+            <label style={{
+              display: 'block',
+              color: '#94a3b8',
+              fontSize: '0.85rem',
+              marginBottom: '6px'
+            }}>
+              Username
+            </label>
+
             <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', display: 'flex' }}>
+              <span style={{
+                position: 'absolute',
+                left: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#64748b',
+                display: 'flex'
+              }}>
                 <User size={18} />
               </span>
+
               <input
                 type="text"
                 value={username}
@@ -89,11 +127,27 @@ export default function Login() {
 
           {/* Campo Contraseña */}
           <div>
-            <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.85rem', marginBottom: '6px' }}>Password</label>
+            <label style={{
+              display: 'block',
+              color: '#94a3b8',
+              fontSize: '0.85rem',
+              marginBottom: '6px'
+            }}>
+              Password
+            </label>
+
             <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', display: 'flex' }}>
+              <span style={{
+                position: 'absolute',
+                left: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#64748b',
+                display: 'flex'
+              }}>
                 <Lock size={18} />
               </span>
+
               <input
                 type="password"
                 value={password}
@@ -133,6 +187,7 @@ export default function Login() {
           >
             Sign In
           </button>
+
         </form>
 
       </div>
