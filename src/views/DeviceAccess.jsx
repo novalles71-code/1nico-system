@@ -43,8 +43,9 @@ export default function DeviceAccess() {
     ]);
 
     if (error) {
-      alert('Error creating device access.');
-      return;
+      console.error('CREATE DEVICE ERROR:', error);
+  alert(error.message);
+  return;
     }
 
     setDeviceLabel('');
