@@ -16,6 +16,12 @@ function App() {
   return (
     <Router>
       <Routes>
+         {/* Estaciones de Trabajo individuales */}
+        <Route path="/system-1" element={<System1 />} />
+        <Route path="/system-2" element={<System2 />} />
+        <Route path="/system-3" element={<System3 />} />
+        <Route path="/system-4" element={<System4 />} />
+
         {/* Login principal */}
         <Route path="/" element={<Login />} />
         
@@ -24,12 +30,6 @@ function App() {
         
         {/* Panel de Control de Breaks */}
         <Route path="/break-control" element={<BreakControl />} />
-        
-        {/* Estaciones de Trabajo individuales */}
-        <Route path="/system-1" element={<System1 />} />
-        <Route path="/system-2" element={<System2 />} />
-        <Route path="/system-3" element={<System3 />} />
-        <Route path="/system-4" element={<System4 />} />
 
         {/* Redirecciones temporales para que no se rompa el Home */}
         <Route path="/groups" element={<Groups />} />

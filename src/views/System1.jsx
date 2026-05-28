@@ -12,7 +12,6 @@ import { supabase } from '../lib/supabase';
 
 const SYSTEM_NAME = 'system1';
 const SYSTEM_LABEL = 'System 1';
-const SYSTEM_AUTH_PIN = '4581'; // Cambia este PIN si quieres otro para autorizar la PC de System 1
 
 export default function System1() {
   const [activeTab, setActiveTab] = useState('Home');
@@ -83,35 +82,54 @@ export default function System1() {
     e.preventDefault();
     setAuthError('');
 
-    if (authPin.trim() !== SYSTEM_AUTH_PIN) {
-      setAuthError('Invalid authorization PIN.');
+    const enteredPin = authPin.trim().toUpperCase();
+
+    if (!enteredPin) {
+      setAuthError('Enter authorization PIN.');
       return;
     }
 
     try {
-      let token = deviceToken || localStorage.getItem(`${SYSTEM_NAME}_device_token`);
+      let localDeviceToken =
+        deviceToken || localStorage.getItem(`${SYSTEM_NAME}_device_token`);
 
-      if (!token) {
-        token = crypto.randomUUID();
-        localStorage.setItem(`${SYSTEM_NAME}_device_token`, token);
-        setDeviceToken(token);
+      if (!localDeviceToken) {
+        localDeviceToken = crypto.randomUUID();
+        localStorage.setItem(`${SYSTEM_NAME}_device_token`, localDeviceToken);
+        setDeviceToken(localDeviceToken);
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('device_authorizations')
-        .upsert(
-          {
-            system_name: SYSTEM_NAME,
-            device_token: token,
-            device_label: `${SYSTEM_LABEL} Authorized PC`,
-            is_active: true,
-          },
-          { onConflict: 'device_token' }
-        );
+        .select('*')
+        .eq('system_name', SYSTEM_NAME)
+        .eq('device_token', enteredPin)
+        .eq('is_active', true)
+        .maybeSingle();
 
       if (error) {
-        console.error('Device authorization error:', error);
-        setAuthError('Unable to authorize this device. Check Supabase connection.');
+        console.error('Authorization check error:', error);
+        setAuthError('Unable to verify authorization PIN.');
+        return;
+      }
+
+      if (!data) {
+        setAuthError('Invalid authorization PIN.');
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from('device_authorizations')
+        .update({
+          device_token: localDeviceToken,
+          device_label: data.device_label || `${SYSTEM_LABEL} Authorized PC`,
+          is_active: true,
+        })
+        .eq('id', data.id);
+
+      if (updateError) {
+        console.error('Device lock error:', updateError);
+        setAuthError('Unable to lock this PC.');
         return;
       }
 
