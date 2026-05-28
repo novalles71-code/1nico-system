@@ -56,7 +56,7 @@ export default function System1() {
         const { data, error } = await supabase
           .from('device_authorizations')
           .select('id, system_name, device_token, is_active')
-          .eq('system_name', 'system-1')
+          .eq('system_name', 'system1')
           .eq('device_token', token)
           .eq('is_active', true)
           .maybeSingle();
