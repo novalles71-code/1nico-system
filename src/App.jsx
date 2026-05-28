@@ -15,41 +15,21 @@ import DeviceAccess from './views/DeviceAccess';
 function App() {
   return (
     <Router>
-      
-
       <Routes>
+        <Route path="/" element={<Login />} />
 
-        {/* Estaciones de Trabajo individuales */}
         <Route path="/system-1" element={<System1 />} />
         <Route path="/system-2" element={<System2 />} />
         <Route path="/system-3" element={<System3 />} />
         <Route path="/system-4" element={<System4 />} />
 
-        {/* Login principal */}
-        <Route path="/" element={<Login />} />
-        
-        {/* Panel de Inicio */}
         <Route path="/home" element={<Home />} />
-        
-        {/* Panel de Control de Breaks */}
         <Route path="/break-control" element={<BreakControl />} />
-
-        {/* Redirecciones temporales para que no se rompa el Home */}
         <Route path="/groups" element={<Groups />} />
-
-        {/* Noticias y Actualizaciones */}
         <Route path="/news" element={<News />} />
-
-        {/* Registro de Empleados */}
         <Route path="/employees" element={<Employees />} />
-
-        {/* Attendance data base */}
         <Route path="/attendance" element={<Attendance />} />
-
-        {/* Accesos privados */}
         <Route path="/device-access" element={<DeviceAccess />} />
-        
-        
       </Routes>
     </Router>
   );
