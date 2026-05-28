@@ -15,12 +15,15 @@ import DeviceAccess from './views/DeviceAccess';
 function App() {
   return (
     <Router>
-      <Routes>
-         {/* Estaciones de Trabajo individuales */}
+      
+        {/* Estaciones de Trabajo individuales */}
         <Route path="/system-1" element={<System1 />} />
         <Route path="/system-2" element={<System2 />} />
         <Route path="/system-3" element={<System3 />} />
         <Route path="/system-4" element={<System4 />} />
+
+
+      <Routes>
 
         {/* Login principal */}
         <Route path="/" element={<Login />} />
