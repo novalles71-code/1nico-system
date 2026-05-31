@@ -639,7 +639,7 @@ export default function System1() {
 ^CI28
 ^PW812
 ^LL1624
-^LH0,0
+^LH0,90
 ^MD18
 ^PR4
 ^FO70,70^A0N,30,30^FDITEM#:^FS
