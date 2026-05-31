@@ -679,12 +679,16 @@ export default function System1() {
     const zpl = labelsToPrint.map(buildZebraLabelZpl).join('\n');
 
     try {
+      if (!zpl || !zpl.trim()) {
+        throw new Error('Generated ZPL is empty.');
+      }
+
       const response = await fetch('http://localhost:5050/print', {
         method: 'POST',
         headers: {
-          'Content-Type': 'text/plain',
+          'Content-Type': 'application/json',
         },
-        body: zpl,
+        body: JSON.stringify({ zpl }),
       });
 
       if (!response.ok) {
