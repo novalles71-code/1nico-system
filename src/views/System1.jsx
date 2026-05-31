@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import JsBarcode from 'jsbarcode';
 import {
   ClipboardCheck,
   BarChart3,
@@ -399,6 +400,311 @@ export default function System1() {
   const [expandedQcCard, setExpandedQcCard] = useState(null);
   const [qcLanguage, setQcLanguage] = useState('en');
 
+
+  // LABELS
+  const [labelData, setLabelData] = useState({
+    shift: '1',
+    job: 'A',
+    qty: '',
+    dateCode: '',
+    labelQty: '1',
+    palletQty: '1',
+    startingPallet: '1',
+    misc: '',
+  });
+
+  const [labelsCreated, setLabelsCreated] = useState(false);
+
+  const shift1Jobs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M'];
+  const shift2Jobs = ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'];
+
+  const jobCodeMap = {
+    A: '1', B: '4', C: '7', D: 'A', E: 'D', F: 'G',
+    G: 'J', H: 'M', J: 'P', K: 'S', L: 'V', M: 'Y',
+    N: '2', O: '5', P: '8', Q: 'B', R: 'E', S: 'H',
+    T: 'K', U: 'N', V: 'Q', W: 'T', X: 'W', Y: 'Z',
+  };
+
+  const availableLabelJobs = labelData.shift === '1' ? shift1Jobs : shift2Jobs;
+
+  const getJulianDay = () => {
+    const today = new Date();
+    const start = new Date(today.getFullYear(), 0, 0);
+    const diff = today - start;
+    return String(Math.floor(diff / 86400000)).padStart(3, '0');
+  };
+
+  const getDateParts = () => {
+    const today = new Date();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const yy = String(today.getFullYear()).slice(-2);
+    return { mm, dd, yy };
+  };
+
+  const normalizeDatePart = (part) => {
+    const cleaned = String(part || '').replace(/\D/g, '');
+    if (!cleaned) return '';
+    return String(parseInt(cleaned, 10));
+  };
+
+  const formatDateCodeInput = (value) => {
+    const raw = String(value || '').trim();
+    const digits = raw.replace(/\D/g, '');
+
+    if (!digits) return '';
+
+    let mm = '';
+    let dd = '';
+    let yyyy = '';
+
+    if (digits.length === 6) {
+      mm = digits.slice(0, 2);
+      dd = digits.slice(2, 4);
+      yyyy = `20${digits.slice(4, 6)}`;
+    } else if (digits.length === 8) {
+      mm = digits.slice(0, 2);
+      dd = digits.slice(2, 4);
+      yyyy = digits.slice(4, 8);
+    } else {
+      const parts = raw.split('/').filter(Boolean);
+
+      if (parts.length === 3) {
+        mm = parts[0];
+        dd = parts[1];
+        yyyy = parts[2];
+        if (yyyy.length === 2) yyyy = `20${yyyy}`;
+      } else {
+        return raw;
+      }
+    }
+
+    const month = normalizeDatePart(mm);
+    const day = normalizeDatePart(dd);
+
+    if (!month || !day || yyyy.length !== 4) return raw;
+
+    return `${month}/${day}/${yyyy}`;
+  };
+
+  const formatDateCodeTyping = (value, inputType = '') => {
+    const raw = String(value || '').replace(/[^\d/]/g, '').slice(0, 10);
+
+    // Let Backspace/Delete behave like a normal text field.
+    if (String(inputType || '').startsWith('delete')) return raw;
+
+    const digits = raw.replace(/\D/g, '').slice(0, 8);
+
+    if (!digits) return '';
+    if (digits.length < 2) return digits;
+    if (digits.length === 2) return `${digits}/`;
+    if (digits.length < 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    if (digits.length === 4) return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/`;
+    if (digits.length === 6) return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/20${digits.slice(4, 6)}`;
+
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+  };
+
+  const labelYear = getDateParts().yy;
+  const labelJulian = getJulianDay();
+  const labelJobCode = jobCodeMap[labelData.job] || '';
+  const labelItemNumber = tableData.productNumber || '';
+  const generatedLot = `MX${labelJulian}${labelYear}01${labelJobCode}`;
+  const generatedSite = 'MDLZ8';
+  const generatedWorkOrder = `MDLZFG${getDateParts().mm}${getDateParts().dd}${getDateParts().yy}`;
+  const generatedLicBase = `${labelYear}${labelJulian}S1${labelData.shift}${labelData.job}`;
+
+  const safeLabelQty = Math.max(parseInt(labelData.labelQty, 10) || 1, 1);
+  const safePalletQty = Math.max(parseInt(labelData.palletQty, 10) || 1, 1);
+  const safeStartingPallet = Math.max(parseInt(labelData.startingPallet, 10) || 1, 1);
+
+  const generatedLabels = [];
+
+  for (let palletIndex = 0; palletIndex < safePalletQty; palletIndex += 1) {
+    const palletNumber = safeStartingPallet + palletIndex;
+    const licNumber = String(palletNumber).padStart(2, '0');
+    const lic = `${generatedLicBase}-${licNumber}`;
+
+    for (let copyIndex = 0; copyIndex < safeLabelQty; copyIndex += 1) {
+      generatedLabels.push({
+        id: `${palletNumber}-${copyIndex + 1}`,
+        palletNumber,
+        copyNumber: copyIndex + 1,
+        lic,
+        item: labelItemNumber,
+        qty: labelData.qty,
+        lot: generatedLot,
+        dateCode: labelData.dateCode,
+        site: generatedSite,
+        workOrder: generatedWorkOrder,
+        misc: labelData.misc,
+      });
+    }
+  }
+
+  const previewLabel = generatedLabels[0];
+
+  useEffect(() => {
+    setLabelData((prev) => {
+      const validJobs = prev.shift === '1' ? shift1Jobs : shift2Jobs;
+
+      if (validJobs.includes(prev.job)) return prev;
+
+      return {
+        ...prev,
+        job: prev.shift === '1' ? 'A' : 'N',
+      };
+    });
+  }, [labelData.shift]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      document.querySelectorAll('svg[data-barcode-value]').forEach((el) => {
+        const value = el.getAttribute('data-barcode-value');
+        if (!value) return;
+
+        try {
+          JsBarcode(el, value, {
+            format: 'CODE128',
+            displayValue: false,
+            height: 42,
+            width: 1.45,
+            margin: 0,
+            marginLeft: 0,
+            marginRight: 0,
+          });
+        } catch (error) {
+          console.error('Barcode render error:', error);
+        }
+      });
+    }, 50);
+
+    return () => clearTimeout(timeout);
+  }, [
+    activeTab,
+    labelItemNumber,
+    labelData.qty,
+    labelData.dateCode,
+    labelData.labelQty,
+    labelData.palletQty,
+    labelData.startingPallet,
+    labelData.misc,
+    labelData.shift,
+    labelData.job,
+    generatedLot,
+    generatedWorkOrder,
+  ]);
+
+  const handleLabelChange = (field, value) => {
+    setLabelsCreated(false);
+    setLabelData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const validateLabelData = () => {
+    if (!labelItemNumber) {
+      alert('Item# is empty. Enter the product number in Run Total first.');
+      return null;
+    }
+
+    if (!labelData.qty.trim()) {
+      alert('Enter Qty before printing labels.');
+      return null;
+    }
+
+    const finalDateCode = formatDateCodeInput(labelData.dateCode);
+
+    if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(finalDateCode)) {
+      alert('Date Code must use M/D/YYYY format.');
+      return null;
+    }
+
+    return finalDateCode;
+  };
+
+  const cleanZplValue = (value) =>
+    String(value || '')
+      .replace(/[\^~]/g, ' ')
+      .trim();
+
+  const buildZebraLabelZpl = (label) => {
+    const item = cleanZplValue(label.item);
+    const qty = cleanZplValue(label.qty);
+    const lot = cleanZplValue(label.lot);
+    const dateCode = cleanZplValue(label.dateCode);
+    const lic = cleanZplValue(label.lic);
+    const site = cleanZplValue(label.site);
+    const workOrder = cleanZplValue(label.workOrder);
+
+    return `^XA
+^CI28
+^PW812
+^LL1624
+^LH0,0
+^MD18
+^PR4
+^FO70,70^A0N,30,30^FDITEM#:^FS
+^FO230,45^BY2,2,70^BCN,70,N,N,N^FD${item}^FS
+^FO230,122^A0N,44,44^FD${item}^FS
+^FO70,250^A0N,30,30^FDQTY:^FS
+^FO230,220^BY2,2,60^BCN,60,N,N,N^FD${qty}^FS
+^FO230,292^A0N,44,44^FD${qty}^FS
+^FO70,420^A0N,30,30^FDLOT:^FS
+^FO230,390^BY2,2,70^BCN,70,N,N,N^FD${lot}^FS
+^FO230,468^A0N,44,44^FD${lot}^FS
+^FO70,600^A0N,28,28^FDDATE^FS
+^FO70,630^A0N,28,28^FDCODE:^FS
+^FO230,585^BY2,2,70^BCN,70,N,N,N^FD${dateCode}^FS
+^FO230,665^A0N,44,44^FD${dateCode}^FS
+^FO70,820^A0N,30,30^FDLIC#:^FS
+^FO230,790^BY2,2,75^BCN,75,N,N,N^FD${lic}^FS
+^FO230,875^A0N,42,42^FD${lic}^FS
+^FO70,1020^A0N,30,30^FDSITE:^FS
+^FO230,990^BY2,2,65^BCN,65,N,N,N^FD${site}^FS
+^FO230,1065^A0N,38,38^FD${site}^FS
+^FO70,1200^A0N,30,30^FDWO:^FS
+^FO230,1170^BY2,2,70^BCN,70,N,N,N^FD${workOrder}^FS
+^FO230,1250^A0N,38,38^FD${workOrder}^FS
+^XZ`;
+  };
+
+  const printLabels = async () => {
+    const finalDateCode = validateLabelData();
+    if (!finalDateCode) return;
+
+    const labelsToPrint = generatedLabels.map((label) => ({
+      ...label,
+      dateCode: finalDateCode,
+    }));
+
+    const zpl = labelsToPrint.map(buildZebraLabelZpl).join('\n');
+
+    try {
+      const response = await fetch('http://localhost:5050/print', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: zpl,
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Unable to print labels.');
+      }
+
+      setLabelData((prev) => ({
+        ...prev,
+        qty: '',
+        dateCode: '',
+      }));
+
+      setLabelsCreated(false);
+    } catch (error) {
+      console.error('Label print error:', error);
+      alert(`Unable to print labels: ${error.message}`);
+    }
+  };
+
   const homeModulesInfo = [
     {
       title: 'Attendance',
@@ -426,6 +732,12 @@ export default function System1() {
       icon: <Coffee size={24} />,
     },
     {
+      title: 'Labels',
+      desc: 'Label Format.',
+      icon: <ClipboardCheck size={24} />,
+    },
+
+    {
       title: 'News',
       desc: 'Internal announcements, alerts, updates, and notifications.',
       icon: <Newspaper size={24} />,
@@ -437,16 +749,17 @@ export default function System1() {
     },
   ];
 
-  const tabs = [
-    'Home',
-    'Attendance',
-    'QC',
-    'Run Total',
-    'Exp. Calc',
-    'Breaks',
-    'News',
-    'Rules',
-  ];
+const tabs = [
+  'Home',
+  'Attendance',
+  'QC',
+  'Run Total',
+  'Exp. Calc',
+  'Breaks',
+  'Labels',
+  'News',
+  'Rules',
+];
 
   if (authLoading) {
     return (
@@ -1673,6 +1986,215 @@ Entonces puedes comenzar a preparar y completar toda la documentación y papeler
             </div>
           )}
 
+          {/* LABELS */}
+          {activeTab === 'Labels' && (
+            <div>
+              <style>{`
+                .labels-screen-wrap {
+                  display: grid;
+                  grid-template-columns: 1fr;
+                  gap: 18px;
+                }
+
+                .print-only-labels {
+                  display: none;
+                }
+
+                @media print {
+                  body * {
+                    visibility: hidden !important;
+                  }
+
+                  #labels-print-area,
+                  #labels-print-area * {
+                    visibility: visible !important;
+                  }
+
+                  #labels-print-area {
+                    display: block !important;
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    width: 4in;
+                    background: #fff;
+                  }
+
+                  .screen-label-workspace {
+                    display: none !important;
+                  }
+
+                  .label-print-page {
+                    width: 4in !important;
+                    height: 8in !important;
+                    page-break-after: always;
+                    break-after: page;
+                    border: none !important;
+                    border-radius: 0 !important;
+                    box-shadow: none !important;
+                    margin: 0 !important;
+                  }
+
+                  @page {
+                    size: 4in 8in;
+                    margin: 0;
+                  }
+                }
+              `}</style>
+
+              <div className="screen-label-workspace labels-screen-wrap">
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'flex-start',
+                    gap: '24px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '360px',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '16px',
+                      boxShadow: '0 10px 24px rgba(15,23,42,0.08)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        backgroundColor: '#e5e7eb',
+                        color: '#111827',
+                        padding: '14px 18px',
+                        fontSize: '1.05rem',
+                        fontWeight: '900',
+                        borderBottom: '1px solid #cbd5e1',
+                      }}
+                    >
+                      Label Setup
+                    </div>
+
+                    <div style={{ padding: '18px', display: 'grid', gap: '14px' }}>
+                      <CompactLabelControl label="Shift">
+                        <select
+                          value={labelData.shift}
+                          onChange={(e) => handleLabelChange('shift', e.target.value)}
+                          style={compactLabelInput}
+                        >
+                          <option value="1">Shift 1</option>
+                          <option value="2">Shift 2</option>
+                        </select>
+                      </CompactLabelControl>
+
+                      <CompactLabelControl label="Job">
+                        <select
+                          value={labelData.job}
+                          onChange={(e) => handleLabelChange('job', e.target.value)}
+                          style={compactLabelInput}
+                        >
+                          {availableLabelJobs.map((job) => (
+                            <option key={job} value={job}>Job {job}</option>
+                          ))}
+                        </select>
+                      </CompactLabelControl>
+
+                      <CompactLabelControl label="Label Qty">
+                        <input
+                          type="number"
+                          min="1"
+                          value={labelData.labelQty}
+                          onChange={(e) => handleLabelChange('labelQty', e.target.value)}
+                          style={compactLabelInput}
+                        />
+                      </CompactLabelControl>
+
+                      <CompactLabelControl label="Pallet Qty">
+                        <input
+                          type="number"
+                          min="1"
+                          value={labelData.palletQty}
+                          onChange={(e) => handleLabelChange('palletQty', e.target.value)}
+                          style={compactLabelInput}
+                        />
+                      </CompactLabelControl>
+
+                      <CompactLabelControl label="Starting Pallet #">
+                        <input
+                          type="number"
+                          min="1"
+                          value={labelData.startingPallet}
+                          onChange={(e) => handleLabelChange('startingPallet', e.target.value)}
+                          style={compactLabelInput}
+                        />
+                      </CompactLabelControl>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      backgroundColor: '#e2e8f0',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '18px',
+                      padding: '18px',
+                      boxShadow: '0 12px 30px rgba(15,23,42,0.14)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        backgroundColor: '#cbd5e1',
+                        color: '#111827',
+                        padding: '12px 16px',
+                        fontSize: '1.35rem',
+                        fontWeight: '900',
+                        textAlign: 'center',
+                        borderRadius: '12px 12px 0 0',
+                        border: '1px solid #94a3b8',
+                        borderBottom: 'none',
+                      }}
+                    >
+                      1NICO Pallet Label
+                    </div>
+
+                    <div
+                      style={{
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid #94a3b8',
+                        borderRadius: '0 0 12px 12px',
+                        padding: '18px',
+                      }}
+                    >
+                      <EditablePalletPreviewLabel
+                        label={previewLabel}
+                        labelData={labelData}
+                        handleLabelChange={handleLabelChange}
+                        formatDateCodeInput={formatDateCodeInput}
+                        formatDateCodeTyping={formatDateCodeTyping}
+                      />
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        marginTop: '16px',
+                      }}
+                    >
+                      <button onClick={printLabels} style={labelButtonRed}>
+                        Print
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="labels-print-area" className="print-only-labels">
+                {generatedLabels.map((label) => (
+                  <PalletPrintLabel key={`${label.palletNumber}-${label.copyNumber}`} label={label} />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* NEWS */}
           {activeTab === 'News' && (
             <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -1796,6 +2318,360 @@ Entonces puedes comenzar a preparar y completar toda la documentación y papeler
     </div>
   );
 }
+
+
+function CompactLabelControl({ label, children }) {
+  return (
+    <label style={{ display: 'grid', gap: '6px' }}>
+      <span style={{ color: '#334155', fontSize: '0.82rem', fontWeight: '900' }}>
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function EditablePalletPreviewLabel({ label, labelData, handleLabelChange, formatDateCodeInput, formatDateCodeTyping }) {
+  if (!label) return null;
+
+  const previewSuffix = 'preview-label';
+
+  return (
+    <div
+      style={{
+        width: '4in',
+        minHeight: '8in',
+        backgroundColor: '#fff',
+        color: '#000',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        padding: '0.28in 0.28in',
+        boxSizing: 'border-box',
+        fontFamily: 'Arial, sans-serif',
+        overflow: 'hidden',
+      }}
+    >
+      <PreviewBarcodeRow label="ITEM#" value={label.item} barcodeId={`barcode-item-${previewSuffix}`} big />
+
+      <PreviewBarcodeRow
+        label="QTY"
+        value={labelData.qty}
+        barcodeId={`barcode-qty-${previewSuffix}`}
+        editable
+        onChange={(value) => handleLabelChange('qty', value)}
+        placeholder="Qty"
+      />
+
+      <PreviewBarcodeRow label="LOT" value={label.lot} barcodeId={`barcode-lot-${previewSuffix}`} big />
+
+      <PreviewBarcodeRow
+        label="DATE CODE"
+        value={labelData.dateCode}
+        barcodeId={`barcode-date-${previewSuffix}`}
+        editable
+        onChange={(value, event) =>
+          handleLabelChange(
+            'dateCode',
+            formatDateCodeTyping(value, event?.nativeEvent?.inputType)
+          )
+        }
+        onBlur={(value) => handleLabelChange('dateCode', formatDateCodeInput(value))}
+        placeholder="M/D/YYYY"
+      />
+
+      <PreviewBarcodeRow label="LIC#" value={label.lic} barcodeId={`barcode-lic-${previewSuffix}`} />
+      <PreviewBarcodeRow label="SITE" value={label.site} barcodeId={`barcode-site-${previewSuffix}`} small />
+      <PreviewBarcodeRow label="WO" value={label.workOrder} barcodeId={`barcode-wo-${previewSuffix}`} />
+    </div>
+  );
+}
+
+function PreviewBarcodeRow({ label, value, barcodeId, editable, onChange, onBlur, placeholder, big, small }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '0.72in 1fr',
+        columnGap: '0.1in',
+        alignItems: 'start',
+        marginBottom: big ? '0.16in' : '0.13in',
+      }}
+    >
+      <div
+        style={{
+          textAlign: 'right',
+          fontSize: label === 'DATE CODE' ? '0.125in' : '0.14in',
+          fontWeight: '700',
+          lineHeight: '1.05',
+          paddingTop: '0.17in',
+        }}
+      >
+        {label}:
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          justifyContent: 'flex-start',
+          textAlign: 'left',
+          width: '100%',
+          margin: 0,
+          padding: 0,
+        }}
+      >
+        <BarcodeSvg value={value} id={barcodeId} />
+
+        {editable ? (
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value, e)}
+            onBlur={(e) => onBlur?.(e.target.value)}
+            placeholder={placeholder}
+            style={previewEditableInput}
+          />
+        ) : (
+          <div
+            style={{
+              display: 'block',
+              width: 'auto',
+              maxWidth: '100%',
+              fontSize: big ? '0.22in' : small ? '0.16in' : '0.18in',
+              fontWeight: '900',
+              lineHeight: '1.05',
+              marginTop: '0.02in',
+              textAlign: 'left',
+              marginLeft: 0,
+              paddingLeft: 0,
+              alignSelf: 'flex-start',
+            }}
+          >
+            {value}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+function LabelFormText({ label, children }) {
+  return (
+    <>
+      <div
+        style={{
+          textAlign: 'right',
+          color: '#374151',
+          fontSize: '1.05rem',
+          fontWeight: '800',
+        }}
+      >
+        {label}:
+      </div>
+      <div>{children}</div>
+    </>
+  );
+}
+
+function BarcodeSvg({ value, id }) {
+  return (
+    <svg
+      data-barcode-value={value || ''}
+      id={id}
+      style={{
+        display: 'block',
+        width: 'auto',
+        maxWidth: 'none',
+        height: '0.46in',
+        margin: 0,
+        padding: 0,
+        marginLeft: 0,
+        marginRight: 'auto',
+        alignSelf: 'flex-start',
+        textAlign: 'left',
+        overflow: 'visible',
+      }}
+    />
+  );
+}
+
+function PalletPrintLabel({ label, preview }) {
+  const barcodeSuffix = `${label.lic}-${label.copyNumber}`.replace(/[^a-zA-Z0-9]/g, '');
+
+  return (
+    <div
+      className="label-print-page"
+      style={{
+        width: preview ? '100%' : '4in',
+        maxWidth: preview ? '4in' : 'none',
+        height: preview ? '8in' : '8in',
+        backgroundColor: '#fff',
+        color: '#000',
+        border: preview ? '1px solid #cbd5e1' : 'none',
+        borderRadius: preview ? '14px' : '0',
+        padding: '0.28in 0.28in',
+        boxSizing: 'border-box',
+        fontFamily: 'Arial, sans-serif',
+        overflow: 'hidden',
+        boxShadow: preview ? '0 10px 24px rgba(15,23,42,0.12)' : 'none',
+      }}
+    >
+      <LabelBarcodeRow label="ITEM#" value={label.item} barcodeId={`barcode-item-${barcodeSuffix}`} big />
+      <LabelBarcodeRow label="QTY" value={label.qty} barcodeId={`barcode-qty-${barcodeSuffix}`} />
+      <LabelBarcodeRow label="LOT" value={label.lot} barcodeId={`barcode-lot-${barcodeSuffix}`} big />
+      <LabelBarcodeRow label="DATE CODE" value={label.dateCode} barcodeId={`barcode-date-${barcodeSuffix}`} />
+      <LabelBarcodeRow label="LIC#" value={label.lic} barcodeId={`barcode-lic-${barcodeSuffix}`} />
+      <LabelBarcodeRow label="SITE" value={label.site} barcodeId={`barcode-site-${barcodeSuffix}`} small />
+      <LabelBarcodeRow label="WO" value={label.workOrder} barcodeId={`barcode-wo-${barcodeSuffix}`} />
+    </div>
+  );
+}
+
+function LabelBarcodeRow({ label, value, barcodeId, big, small }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '0.72in 1fr',
+        columnGap: '0.1in',
+        alignItems: 'start',
+        marginBottom: big ? '0.16in' : '0.13in',
+      }}
+    >
+      <div
+        style={{
+          textAlign: 'right',
+          fontSize: label === 'DATE CODE' ? '0.125in' : '0.14in',
+          fontWeight: '700',
+          lineHeight: '1.05',
+          paddingTop: '0.17in',
+        }}
+      >
+        {label}:
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          justifyContent: 'flex-start',
+          textAlign: 'left',
+          width: '100%',
+          margin: 0,
+          padding: 0,
+        }}
+      >
+        <BarcodeSvg value={value} id={barcodeId} />
+        <div
+          style={{
+            display: 'block',
+            width: 'auto',
+            maxWidth: '100%',
+            fontSize: big ? '0.22in' : small ? '0.16in' : '0.18in',
+            fontWeight: '900',
+            lineHeight: '1.05',
+            marginTop: '0.02in',
+            textAlign: 'left',
+            marginLeft: 0,
+            paddingLeft: 0,
+            alignSelf: 'flex-start',
+          }}
+        >
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const compactLabelInput = {
+  width: '100%',
+  height: '38px',
+  border: '1px solid #94a3b8',
+  borderRadius: '8px',
+  padding: '6px 10px',
+  color: '#0f172a',
+  backgroundColor: '#fff',
+  fontSize: '0.95rem',
+  fontWeight: '800',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+
+const previewEditableInput = {
+  width: '2.65in',
+  maxWidth: '100%',
+  border: '1px solid #9ca3af',
+  borderRadius: '4px',
+  padding: '0.04in 0.06in',
+  boxSizing: 'border-box',
+  color: '#000',
+  backgroundColor: '#fff',
+  fontSize: '0.18in',
+  fontWeight: '900',
+  outline: 'none',
+  textAlign: 'left',
+  marginTop: '0.02in',
+};
+
+const labelButtonRed = {
+  backgroundColor: '#dc2626',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '10px',
+  padding: '12px 22px',
+  fontWeight: '900',
+  cursor: 'pointer',
+  boxShadow: '0 6px 14px rgba(220,38,38,0.18)',
+};
+
+const labelButtonGray = {
+  backgroundColor: '#334155',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '10px',
+  padding: '12px 22px',
+  fontWeight: '900',
+  cursor: 'pointer',
+  boxShadow: '0 6px 14px rgba(51,65,85,0.18)',
+};
+
+const palletLabelInput = {
+  width: '230px',
+  maxWidth: '100%',
+  height: '36px',
+  border: '2px solid #9ca3af',
+  borderRadius: '2px',
+  padding: '4px 8px',
+  boxSizing: 'border-box',
+  color: '#111827',
+  backgroundColor: '#fff',
+  fontSize: '1rem',
+  fontWeight: '700',
+  outline: 'none',
+};
+
+const palletLabelReadOnlyInput = {
+  ...palletLabelInput,
+  backgroundColor: '#e5e7eb',
+  color: '#374151',
+  cursor: 'not-allowed',
+};
+
+const labelIconButton = {
+  width: '76px',
+  height: '58px',
+  border: '2px solid #6b7280',
+  backgroundColor: '#e5e7eb',
+  color: '#111827',
+  borderRadius: '4px',
+  fontSize: '1.5rem',
+  fontWeight: '900',
+  cursor: 'pointer',
+  boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.12)',
+};
 
 const attendanceThLeft = {
   padding: '12px',
