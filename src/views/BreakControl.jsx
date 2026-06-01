@@ -1,32 +1,75 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Coffee, ArrowLeft } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function BreakControl() {
   const navigate = useNavigate();
 
-  // Cargamos los valores guardados en localStorage, o dejamos 1 por defecto
-  const [systems, setSystems] = useState(() => {
-    const saved = localStorage.getItem('break_systems_config');
-    return saved ? JSON.parse(saved) : {
-      system1: 1,
-      system2: 1,
-      system3: 1,
-      system4: 1,
-    };
+  const [systems, setSystems] = useState({
+    system1: 1,
+    system2: 1,
+    system3: 1,
+    system4: 1,
   });
 
-  // Cada vez que un número cambie, lo guardamos automáticamente en el navegador
   useEffect(() => {
-    localStorage.setItem('break_systems_config', JSON.stringify(systems));
-  }, [systems]);
+    const loadConfig = async () => {
+      const { data, error } = await supabase
+        .from('break_config')
+        .select('*')
+        .eq('id', 1)
+        .single();
 
-  // Manejador para el cambio de cada menú desplegable
-  const handleChange = (sysKey, value) => {
+      if (error) {
+        console.error('Load break config error:', error);
+        return;
+      }
+
+      setSystems({
+        system1: data.system1,
+        system2: data.system2,
+        system3: data.system3,
+        system4: data.system4,
+      });
+    };
+
+    loadConfig();
+
+    const channel = supabase
+      .channel('break-control-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'break_config' },
+        loadConfig
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleChange = async (sysKey, value) => {
+    const numberValue = parseInt(value, 10);
+
     setSystems((prev) => ({
       ...prev,
-      [sysKey]: parseInt(value, 10),
+      [sysKey]: numberValue,
     }));
+
+    const { error } = await supabase
+      .from('break_config')
+      .update({
+        [sysKey]: numberValue,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 1);
+
+    if (error) {
+      console.error('Update break config error:', error);
+      alert('Unable to update break setting.');
+    }
   };
 
   return (
@@ -39,7 +82,6 @@ export default function BreakControl() {
     }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
         
-        {/* Encabezado */}
         <header style={{ marginBottom: '40px', borderBottom: '1px solid #334155', paddingBottom: '20px' }}>
           <button 
             onClick={() => navigate('/home')}
@@ -65,12 +107,12 @@ export default function BreakControl() {
             <div style={{ color: '#38bdf8' }}><Coffee size={32} /></div>
             <h1 style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0 }}>Break Control Panel</h1>
           </div>
+
           <p style={{ color: '#94a3b8', fontSize: '0.95rem', marginTop: '6px', margin: 0 }}>
             Select the shift break setting for each system. Changes apply immediately.
           </p>
         </header>
 
-        {/* Grid de Sistemas con Menús Desplegables */}
         <div style={{ 
           display: 'grid', 
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
@@ -78,6 +120,7 @@ export default function BreakControl() {
         }}>
           {Object.keys(systems).map((sysKey, index) => {
             const sysName = `System ${index + 1}`;
+
             return (
               <div
                 key={sysKey}
@@ -94,7 +137,6 @@ export default function BreakControl() {
                   {sysName}
                 </h3>
                 
-                {/* Menú Desplegable Estilizado */}
                 <select
                   value={systems[sysKey]}
                   onChange={(e) => handleChange(sysKey, e.target.value)}

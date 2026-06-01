@@ -240,22 +240,49 @@ export default function System1() {
     totalRemaining <= 0 && targetAmount > 0 ? '#fee2e2' : '#dcfce7';
 
   // BREAKS
-  const [config, setConfig] = useState(() => {
-    const savedConfig = localStorage.getItem('break_systems_config');
-    return savedConfig ? JSON.parse(savedConfig) : { system1: 1 };
-  });
+  const [config, setConfig] = useState({
+  system1: 1,
+  system2: 1,
+  system3: 1,
+  system4: 1,
+});
 
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'break_systems_config' && e.newValue) {
-        setConfig(JSON.parse(e.newValue));
-      }
-    };
+useEffect(() => {
+  const loadBreakConfig = async () => {
+    const { data, error } = await supabase
+      .from('break_config')
+      .select('*')
+      .eq('id', 1)
+      .single();
 
-    window.addEventListener('storage', handleStorageChange);
+    if (error) {
+      console.error('Load break config error:', error);
+      return;
+    }
 
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+    setConfig({
+      system1: data.system1,
+      system2: data.system2,
+      system3: data.system3,
+      system4: data.system4,
+    });
+  };
+
+  loadBreakConfig();
+
+  const channel = supabase
+    .channel(`${SYSTEM_NAME}-break-config`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'break_config' },
+      loadBreakConfig
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
 
   const currentBreakOption = config.system1 || 1;
 
