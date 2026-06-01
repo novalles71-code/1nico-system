@@ -424,7 +424,7 @@ export default function System1() {
         name: selectedEmployee,
         timeIn: tempTimeIn,
         timeOut: tempTimeOut,
-        role: tempRole,
+        role: tempRole || 'S1',
       },
     ]);
 
@@ -1502,11 +1502,11 @@ const tabs = [
             fontWeight: '500',
           }}
         >
-          Names are loaded from the Employees module. Role options: QC, S1, OP.
+          Names are loaded from Supabase. Role options: QC, OP. Default is S1.
         </div>
 
         <button
-  onClick={() => {
+  onClick={async () => {
     if (attendanceRows.length === 0) {
       alert('No attendance records to submit.');
       return;
@@ -1537,29 +1537,31 @@ const tabs = [
 
     const monday = getMonday(today);
     const weekKey = monday.toISOString().split('T')[0];
-    const storageKey = `weekly_attendance_data_${weekKey}`;
-
-    const saved = localStorage.getItem(storageKey);
-    const weeklyData = saved ? JSON.parse(saved) : {};
 
     const formattedRows = attendanceRows.map((row) => ({
-      name: row.name,
-      timeIn: row.timeIn,
-      timeOut: row.timeOut,
+      week_key: weekKey,
+      day_name: currentDay,
+      employee_name: row.name,
+      time_in: row.timeIn,
+      time_out: row.timeOut,
       role: row.role || 'S1',
       system: 'S1',
     }));
 
-    weeklyData[currentDay] = [
-      ...(weeklyData[currentDay] || []),
-      ...formattedRows,
-    ];
+    const { error } = await supabase
+      .from('attendance_records')
+      .insert(formattedRows);
 
-    localStorage.setItem(storageKey, JSON.stringify(weeklyData));
+    if (error) {
+      console.error('Submit attendance error:', error);
+      alert('Unable to submit attendance.');
+      return;
+    }
 
     alert('Attendance submitted to weekly attendance.');
 
     setAttendanceRows([]);
+    localStorage.removeItem('system1_attendance_rows');
   }}
   style={{
     backgroundColor: '#22c55e',

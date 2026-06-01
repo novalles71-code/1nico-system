@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import { supabase } from '../lib/supabase';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -158,43 +159,71 @@ export default function Attendance() {
   const { monday, weekKey, weekLabel } = getWeekInfo();
   const storageKey = `weekly_attendance_data_${weekKey}`;
 
-  const [weeklyData, setWeeklyData] = useState(() => {
-    const saved = localStorage.getItem(storageKey);
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [weeklyData, setWeeklyData] = useState({});
+  const [loadingAttendance, setLoadingAttendance] = useState(true);
 
   useEffect(() => {
-    const savedEmployees = localStorage.getItem('employees_list');
+    let isMounted = true;
 
-    if (savedEmployees) {
-      try {
-        const parsed = JSON.parse(savedEmployees);
+    const loadWeeklyAttendance = async () => {
+      setLoadingAttendance(true);
 
-        const activeNames = parsed
-          .filter((employee) => employee && employee.active !== false && employee.name)
-          .map((employee) =>
-            String(employee.name).trim().replace(/\s+/g, ' ').toUpperCase()
-          );
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('week_key', weekKey)
+        .order('created_at', { ascending: true });
 
-        localStorage.setItem('attendance_master_list', JSON.stringify(activeNames));
+      if (error) {
+        console.error('Load weekly attendance error:', error);
+        alert('Unable to load weekly attendance.');
+        setLoadingAttendance(false);
         return;
-      } catch (error) {
-        console.error('Unable to sync attendance master list:', error);
       }
-    }
 
-    const cleanEmployees = ORDERED_EMPLOYEES.filter((name) => {
-      if (!name) return false;
-      return !SECTION_NAMES.includes(name);
-    });
+      if (!isMounted) return;
 
-    localStorage.setItem('attendance_master_list', JSON.stringify(cleanEmployees));
-  }, []);
+      const nextWeeklyData = {};
 
+      (data || []).forEach((record) => {
+        const dayName = record.day_name;
 
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(weeklyData));
-  }, [weeklyData, storageKey]);
+        if (!nextWeeklyData[dayName]) {
+          nextWeeklyData[dayName] = [];
+        }
+
+        nextWeeklyData[dayName].push({
+          id: record.id,
+          name: record.employee_name,
+          timeIn: record.time_in || '',
+          timeOut: record.time_out || '',
+          role: record.role || record.system || '',
+          system: record.system || 'S1',
+        });
+      });
+
+      setWeeklyData(nextWeeklyData);
+      setLoadingAttendance(false);
+    };
+
+    loadWeeklyAttendance();
+
+    const channel = supabase
+      .channel(`attendance-records-${weekKey}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance_records' },
+        () => {
+          loadWeeklyAttendance();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [weekKey]);
 
   const getDayDate = (index) => {
     const d = new Date(monday);
@@ -203,7 +232,25 @@ export default function Attendance() {
   };
 
   const employeeRows = useMemo(() => {
-    return ORDERED_EMPLOYEES.map((name) => {
+    const submittedNames = Object.values(weeklyData)
+      .flat()
+      .map((record) => record?.name)
+      .filter(Boolean);
+
+    const orderedNames = [...ORDERED_EMPLOYEES];
+
+    submittedNames.forEach((name) => {
+      const normalized = normalizeName(name);
+      const alreadyExists = orderedNames.some(
+        (orderedName) => normalizeName(orderedName) === normalized
+      );
+
+      if (!alreadyExists) {
+        orderedNames.push(name);
+      }
+    });
+
+    return orderedNames.map((name) => {
       if (!name) return { type: 'space' };
 
       const isSection = SECTION_NAMES.includes(name);
@@ -381,16 +428,39 @@ export default function Attendance() {
       }),
       `weekly-attendance-${weekKey}.xlsx`
     );
+
+    const { error: deleteError } = await supabase
+      .from('attendance_records')
+      .delete()
+      .eq('week_key', weekKey);
+
+    if (deleteError) {
+      console.error('Unable to clear weekly attendance:', deleteError);
+      alert('Excel downloaded, but weekly attendance was not cleared.');
+      return;
+    }
+
+    setWeeklyData({});
   };
 
-  const resetWeek = () => {
+  const resetWeek = async () => {
     const confirmReset = confirm(
       'Download the Excel file before resetting. Reset this weekly attendance?'
     );
 
     if (!confirmReset) return;
 
-    localStorage.removeItem(storageKey);
+    const { error } = await supabase
+      .from('attendance_records')
+      .delete()
+      .eq('week_key', weekKey);
+
+    if (error) {
+      console.error('Reset weekly attendance error:', error);
+      alert('Unable to reset weekly attendance.');
+      return;
+    }
+
     setWeeklyData({});
   };
 
@@ -446,7 +516,7 @@ export default function Attendance() {
           </button>
 
           <div style={{ color: '#94a3b8', fontWeight: '800' }}>
-            Week: {weekLabel}
+            Week: {weekLabel}{loadingAttendance ? ' • Loading...' : ''}
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
