@@ -1,132 +1,172 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 const DEFAULT_EMPLOYEES = [
-  { id: 1, name: 'JOAN ENMANUEL DE LA CRUZ YNOA', active: true },
-  { id: 2, name: 'SUZAN I NAYOAN', active: true },
-  { id: 3, name: 'RANDY DE JESUS MIRABAK SANTOS', active: true },
-  { id: 4, name: 'ODALIS DE LEON', active: true },
-  { id: 5, name: 'ESMERALDA EAGLE JIMENEZ', active: true },
-  { id: 6, name: 'IRMA PINEDA', active: true },
-  { id: 7, name: 'JORDY VALENZUELA SMITH', active: true },
-  { id: 8, name: 'TIFFANY GARCIA', active: true },
-  { id: 9, name: 'JAVIER ADOLFO MOREIRA GARCES', active: true },
-  { id: 10, name: 'MARIA MATOS', active: true },
-  { id: 11, name: 'ALEJANDRA RANGEL', active: true },
-  { id: 12, name: 'CARMEN ESPINAL RODRIGUEZ', active: true },
-  { id: 13, name: 'CESAR O MOLINA MORALES', active: true },
-  { id: 14, name: 'ROBELINA JIMENEZ JIMENEZ', active: true },
-  { id: 15, name: 'RADHAMELIS PEREZ', active: true },
-  { id: 16, name: 'YENY M SOSA', active: true },
-  { id: 17, name: 'NICOL ROSARIO DE LEON', active: true },
-  { id: 18, name: 'SAUDIK P FERREIRA MEDRANO', active: true },
-  { id: 19, name: 'MANUEL DOLORES VILLA GONZALEZ', active: true },
-  { id: 20, name: 'EFRAIN RIVERA FIGUEROA', active: true },
-  { id: 21, name: 'JOSE RAMON MARTE PENA', active: true },
-  { id: 22, name: 'JERSON JOSUE HEERRERA VASQUEZ', active: true },
-  { id: 23, name: 'MIGUEL CEDENO AQUINO', active: true },
-  { id: 24, name: 'BRUNO GABRIEL OLIVO SUNTAXI', active: true },
-  { id: 25, name: 'MARTIN PEREZ OSVALDO', active: true },
-  { id: 26, name: 'VICTOR GRACIANO', active: true },
-  { id: 27, name: 'ALBERTO HERNANDEZ', active: true },
-  { id: 28, name: 'ROMALDO PAGUAY', active: true },
-  { id: 29, name: 'ARMANDO RAFAEL SIERRA MORENO', active: true },
-  { id: 30, name: 'LUIS A DE LA ROSA', active: true },
-  { id: 31, name: 'RAMON ANTONIO BRETON LARA', active: true },
-  { id: 32, name: 'JONATHAN HERNANDEZ ANGELES', active: true },
-  { id: 33, name: 'DARLYN DE JESUS ALMANZAR ANGELES', active: true },
-  { id: 34, name: 'ALBERTO RODRIGUEZ GONZALEZ', active: true },
-  { id: 35, name: 'MARVIN MALDONADO', active: true },
-  { id: 36, name: 'LUIS ARAMIS LOPEZ GARICA', active: true },
-  { id: 37, name: 'ANGEL RAFAEL NIEVES VASQUEZ', active: true },
-  { id: 38, name: 'BRYAN JOSE MARTE BATISTA', active: true },
-  { id: 39, name: 'ELIE FELIZ', active: true },
-  { id: 40, name: 'ALBA LUZ ROMERO LAINEZ', active: true },
-  { id: 41, name: 'FILOMENA POMAQUISA', active: true },
-  { id: 42, name: 'LIGIA ELANA CHILLAGANA', active: true },
-  { id: 43, name: 'LILIANA PATRICIA TAVAREZ', active: true },
-  { id: 44, name: 'MIRLANDE NOZIL', active: true },
-  { id: 45, name: 'ROSSY VALERIO CONTRERAS', active: true },
-  { id: 46, name: 'PATRICIA HUARI AMAO', active: true },
-  { id: 47, name: 'SANDRA JANETH OZORIO', active: true },
-  { id: 48, name: 'VINELLA LAURA', active: true },
-  { id: 49, name: 'YENNY ROCIO SILVA', active: true },
-  { id: 50, name: 'SURIEL AMAYA', active: true },
-  { id: 51, name: 'DOMINGA ALTAGRACIA JAQUEZ', active: true },
-  { id: 52, name: 'JESSICA TORRES MILLA', active: true },
-  { id: 53, name: 'MARIA J CONTRERAS RODRIGUEZ', active: true },
-  { id: 54, name: 'YOLANDA AYALA GARCIA', active: true },
-  { id: 55, name: 'ANASTACIA SAVEDRA', active: true },
-  { id: 56, name: 'JENNY MINE', active: true },
-  { id: 57, name: 'EVA DOMINGUEZ', active: true },
-  { id: 58, name: 'JOSIANE ST. FLEUR', active: true },
-  { id: 59, name: 'SARA POLANCO', active: true },
-  { id: 60, name: 'DELFINA RODRIGUEZ CISNEROS', active: true },
-  { id: 61, name: 'MARIA ORTEGA O.', active: true },
-  { id: 62, name: 'MARIELA FRANCO', active: true },
-  { id: 63, name: 'JESSICA LIZETTE SARAVIA', active: true },
-  { id: 64, name: 'LUZ ALCANTARA', active: true },
-  { id: 65, name: 'VIVIANA GABRIUS', active: true },
-  { id: 66, name: 'MARCIA M. LOPEZ', active: true },
-  { id: 67, name: 'NOEL OVALLES YNOA', active: true },
-  { id: 68, name: 'JOHAN STIVEN GUZMAN OVALLES', active: true },
-  { id: 69, name: 'LOURDES ESTEFANIA ORTIZ', active: true },
-  { id: 70, name: 'ROCIO BEATRIZ VACACELA ORTIZ', active: true },
-  { id: 71, name: 'ELIDA VENTURA', active: true },
-  { id: 72, name: 'LESBY PAOLA DIAZ CASTILLO', active: true },
-  { id: 73, name: 'VIVICA GARCIA', active: true },
-  { id: 74, name: 'ALEXANDRO MEJIA', active: true },
-  { id: 75, name: 'CARLOS GUZMAN', active: true },
-  { id: 76, name: 'DIEGO FERNANDO ASMEL MATUTE', active: true },
-  { id: 77, name: 'AUSTRIA ALVAREZ', active: true },
-  { id: 78, name: 'OLGA RODRIGUEZ', active: true },
-  { id: 79, name: 'DORIS RAMOS', active: true },
-  { id: 80, name: 'RENE DAVID TERRON PADILLA', active: true },
-  { id: 81, name: 'YOAN RODRIGUEZ', active: true },
-  { id: 82, name: 'ERNSO JACQUES', active: true },
-  { id: 83, name: 'LOREN FELIZ', active: true },
-  { id: 84, name: 'EDGAR DIAZ', active: true },
-  { id: 85, name: 'JESUS DONALDO RAMOS DIAZ', active: true },
-  { id: 86, name: 'ELVIS MINIER FLETE', active: true },
-  { id: 87, name: 'LETICIA ESMERALDA (SCANNER)', active: true },
-  { id: 88, name: 'WILREDO HERRERA PINEDA', active: true },
-  { id: 89, name: 'JOSE FERNANDO RAMOS', active: true },
-  { id: 90, name: 'BRIAN PINEDA', active: true },
-  { id: 91, name: 'STALIN TOAPANTA', active: true },
-  { id: 92, name: 'CARLOS DIAZ', active: true },
+  { name: 'JOAN ENMANUEL DE LA CRUZ YNOA', active: true },
+  { name: 'SUZAN I NAYOAN', active: true },
+  { name: 'RANDY DE JESUS MIRABAK SANTOS', active: true },
+  { name: 'ODALIS DE LEON', active: true },
+  { name: 'ESMERALDA EAGLE JIMENEZ', active: true },
+  { name: 'IRMA PINEDA', active: true },
+  { name: 'JORDY VALENZUELA SMITH', active: true },
+  { name: 'TIFFANY GARCIA', active: true },
+  { name: 'JAVIER ADOLFO MOREIRA GARCES', active: true },
+  { name: 'MARIA MATOS', active: true },
+  { name: 'ALEJANDRA RANGEL', active: true },
+  { name: 'CARMEN ESPINAL RODRIGUEZ', active: true },
+  { name: 'CESAR O MOLINA MORALES', active: true },
+  { name: 'ROBELINA JIMENEZ JIMENEZ', active: true },
+  { name: 'RADHAMELIS PEREZ', active: true },
+  { name: 'YENY M SOSA', active: true },
+  { name: 'NICOL ROSARIO DE LEON', active: true },
+  { name: 'SAUDIK P FERREIRA MEDRANO', active: true },
+  { name: 'MANUEL DOLORES VILLA GONZALEZ', active: true },
+  { name: 'EFRAIN RIVERA FIGUEROA', active: true },
+  { name: 'JOSE RAMON MARTE PENA', active: true },
+  { name: 'JERSON JOSUE HEERRERA VASQUEZ', active: true },
+  { name: 'MIGUEL CEDENO AQUINO', active: true },
+  { name: 'BRUNO GABRIEL OLIVO SUNTAXI', active: true },
+  { name: 'MARTIN PEREZ OSVALDO', active: true },
+  { name: 'VICTOR GRACIANO', active: true },
+  { name: 'ALBERTO HERNANDEZ', active: true },
+  { name: 'ROMALDO PAGUAY', active: true },
+  { name: 'ARMANDO RAFAEL SIERRA MORENO', active: true },
+  { name: 'LUIS A DE LA ROSA', active: true },
+  { name: 'RAMON ANTONIO BRETON LARA', active: true },
+  { name: 'JONATHAN HERNANDEZ ANGELES', active: true },
+  { name: 'DARLYN DE JESUS ALMANZAR ANGELES', active: true },
+  { name: 'ALBERTO RODRIGUEZ GONZALEZ', active: true },
+  { name: 'MARVIN MALDONADO', active: true },
+  { name: 'LUIS ARAMIS LOPEZ GARICA', active: true },
+  { name: 'ANGEL RAFAEL NIEVES VASQUEZ', active: true },
+  { name: 'BRYAN JOSE MARTE BATISTA', active: true },
+  { name: 'ELIE FELIZ', active: true },
+  { name: 'ALBA LUZ ROMERO LAINEZ', active: true },
+  { name: 'FILOMENA POMAQUISA', active: true },
+  { name: 'LIGIA ELANA CHILLAGANA', active: true },
+  { name: 'LILIANA PATRICIA TAVAREZ', active: true },
+  { name: 'MIRLANDE NOZIL', active: true },
+  { name: 'ROSSY VALERIO CONTRERAS', active: true },
+  { name: 'PATRICIA HUARI AMAO', active: true },
+  { name: 'SANDRA JANETH OZORIO', active: true },
+  { name: 'VINELLA LAURA', active: true },
+  { name: 'YENNY ROCIO SILVA', active: true },
+  { name: 'SURIEL AMAYA', active: true },
+  { name: 'DOMINGA ALTAGRACIA JAQUEZ', active: true },
+  { name: 'JESSICA TORRES MILLA', active: true },
+  { name: 'MARIA J CONTRERAS RODRIGUEZ', active: true },
+  { name: 'YOLANDA AYALA GARCIA', active: true },
+  { name: 'ANASTACIA SAVEDRA', active: true },
+  { name: 'JENNY MINE', active: true },
+  { name: 'EVA DOMINGUEZ', active: true },
+  { name: 'JOSIANE ST. FLEUR', active: true },
+  { name: 'SARA POLANCO', active: true },
+  { name: 'DELFINA RODRIGUEZ CISNEROS', active: true },
+  { name: 'MARIA ORTEGA O.', active: true },
+  { name: 'MARIELA FRANCO', active: true },
+  { name: 'JESSICA LIZETTE SARAVIA', active: true },
+  { name: 'LUZ ALCANTARA', active: true },
+  { name: 'VIVIANA GABRIUS', active: true },
+  { name: 'MARCIA M. LOPEZ', active: true },
+  { name: 'NOEL OVALLES YNOA', active: true },
+  { name: 'JOHAN STIVEN GUZMAN OVALLES', active: true },
+  { name: 'LOURDES ESTEFANIA ORTIZ', active: true },
+  { name: 'ROCIO BEATRIZ VACACELA ORTIZ', active: true },
+  { name: 'ELIDA VENTURA', active: true },
+  { name: 'LESBY PAOLA DIAZ CASTILLO', active: true },
+  { name: 'VIVICA GARCIA', active: true },
+  { name: 'ALEXANDRO MEJIA', active: true },
+  { name: 'CARLOS GUZMAN', active: true },
+  { name: 'DIEGO FERNANDO ASMEL MATUTE', active: true },
+  { name: 'AUSTRIA ALVAREZ', active: true },
+  { name: 'OLGA RODRIGUEZ', active: true },
+  { name: 'DORIS RAMOS', active: true },
+  { name: 'RENE DAVID TERRON PADILLA', active: true },
+  { name: 'YOAN RODRIGUEZ', active: true },
+  { name: 'ERNSO JACQUES', active: true },
+  { name: 'LOREN FELIZ', active: true },
+  { name: 'EDGAR DIAZ', active: true },
+  { name: 'JESUS DONALDO RAMOS DIAZ', active: true },
+  { name: 'ELVIS MINIER FLETE', active: true },
+  { name: 'LETICIA ESMERALDA (SCANNER)', active: true },
+  { name: 'WILREDO HERRERA PINEDA', active: true },
+  { name: 'JOSE FERNANDO RAMOS', active: true },
+  { name: 'BRIAN PINEDA', active: true },
+  { name: 'STALIN TOAPANTA', active: true },
+  { name: 'CARLOS DIAZ', active: true },
 ];
+
+function cleanEmployeeName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
 
 export default function Employees() {
   const navigate = useNavigate();
 
-  const [employees, setEmployees] = useState(() => {
-    const saved = localStorage.getItem('employees_list');
-    return saved ? JSON.parse(saved) : DEFAULT_EMPLOYEES;
-  });
-
+  const [employees, setEmployees] = useState([]);
   const [name, setName] = useState('');
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const totalEmployees = employees.length;
   const enabledEmployees = employees.filter((employee) => employee.active).length;
   const disabledEmployees = employees.filter((employee) => !employee.active).length;
 
-  const saveEmployees = (newList) => {
-    setEmployees(newList);
+  const loadEmployees = async () => {
+    setLoading(true);
 
-    localStorage.setItem('employees_list', JSON.stringify(newList));
+    const { data, error } = await supabase
+      .from('employees')
+      .select('*')
+      .order('name', { ascending: true });
 
-    const activeNames = newList
-      .filter((employee) => employee && employee.active !== false && employee.name)
-      .map((employee) =>
-        String(employee.name).trim().replace(/\s+/g, ' ').toUpperCase()
-      );
+    if (error) {
+      console.error('Load employees error:', error);
+      alert('Unable to load employees.');
+      setLoading(false);
+      return;
+    }
 
-    localStorage.setItem('attendance_master_list', JSON.stringify(activeNames));
+    if (!data || data.length === 0) {
+      const { error: insertError } = await supabase
+        .from('employees')
+        .insert(DEFAULT_EMPLOYEES);
+
+      if (insertError) {
+        console.error('Default employees insert error:', insertError);
+        alert('Unable to create default employees.');
+        setLoading(false);
+        return;
+      }
+
+      const { data: newData, error: reloadError } = await supabase
+        .from('employees')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (reloadError) {
+        console.error('Reload employees error:', reloadError);
+        alert('Unable to reload employees.');
+        setLoading(false);
+        return;
+      }
+
+      setEmployees(newData || []);
+      setLoading(false);
+      return;
+    }
+
+    setEmployees(data || []);
+    setLoading(false);
   };
 
-  const addEmployee = () => {
-    const cleanName = name.trim().replace(/\s+/g, ' ').toUpperCase();
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+
+  const addEmployee = async () => {
+    const cleanName = cleanEmployeeName(name);
 
     if (!cleanName) return;
 
@@ -137,33 +177,52 @@ export default function Employees() {
       return;
     }
 
-    saveEmployees([
-      ...employees,
-      {
-        id: Date.now(),
-        name: cleanName,
-        active: true,
-      },
-    ]);
+    const { error } = await supabase.from('employees').insert({
+      name: cleanName,
+      active: true,
+    });
+
+    if (error) {
+      console.error('Add employee error:', error);
+      alert('Unable to add employee.');
+      return;
+    }
 
     setName('');
+    await loadEmployees();
   };
 
-  const deleteEmployee = (id) => {
+  const deleteEmployee = async (id) => {
     const confirmDelete = confirm('Delete this employee?');
     if (!confirmDelete) return;
 
-    saveEmployees(employees.filter((employee) => employee.id !== id));
+    const { error } = await supabase
+      .from('employees')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Delete employee error:', error);
+      alert('Unable to delete employee.');
+      return;
+    }
+
+    await loadEmployees();
   };
 
-  const toggleEmployee = (id) => {
-    saveEmployees(
-      employees.map((employee) =>
-        employee.id === id
-          ? { ...employee, active: !employee.active }
-          : employee
-      )
-    );
+  const toggleEmployee = async (id, currentActive) => {
+    const { error } = await supabase
+      .from('employees')
+      .update({ active: !currentActive })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Toggle employee error:', error);
+      alert('Unable to update employee.');
+      return;
+    }
+
+    await loadEmployees();
   };
 
   const filteredEmployees = employees.filter((employee) =>
@@ -190,7 +249,7 @@ export default function Employees() {
             <h1 style={titleStyle}>Employees</h1>
 
             <p style={subtitleStyle}>
-              Simple employee list for attendance and system modules.
+              Employee list connected to Supabase.
             </p>
 
             <div style={counterStyle}>
@@ -242,14 +301,18 @@ export default function Employees() {
 
         <div style={tableContainerStyle}>
           <div style={tableHeaderStyle}>
-            <span>Employee List ({filteredEmployees.length})</span>
-
-            <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-              Showing results
+            <span>
+              Employee List ({loading ? 'Loading...' : filteredEmployees.length})
             </span>
+
+            <button onClick={loadEmployees} style={refreshButtonStyle}>
+              Refresh
+            </button>
           </div>
 
-          {filteredEmployees.length === 0 ? (
+          {loading ? (
+            <div style={emptyStyle}>Loading employees...</div>
+          ) : filteredEmployees.length === 0 ? (
             <div style={emptyStyle}>No employees found.</div>
           ) : (
             <table style={tableStyle}>
@@ -293,24 +356,43 @@ export default function Employees() {
                             : '1px solid rgba(239, 68, 68, 0.35)',
                         }}
                       >
-                        {employee.active ? 'ENABLE' : 'DISABLE'}
+                        {employee.active ? 'Enable' : 'Disable'}
                       </span>
                     </td>
 
                     <td style={tdStyle}>
-                      <button
-                        onClick={() => toggleEmployee(employee.id)}
-                        style={softButtonStyle}
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: '8px',
+                          justifyContent: 'center',
+                          flexWrap: 'wrap',
+                        }}
                       >
-                        {employee.active ? 'Disable' : 'Enable'}
-                      </button>
+                        <button
+                          onClick={() =>
+                            toggleEmployee(employee.id, employee.active)
+                          }
+                          style={{
+                            ...smallButtonStyle,
+                            color: employee.active ? '#fbbf24' : '#86efac',
+                            borderColor: employee.active ? '#fbbf24' : '#86efac',
+                          }}
+                        >
+                          {employee.active ? 'Disable' : 'Enable'}
+                        </button>
 
-                      <button
-                        onClick={() => deleteEmployee(employee.id)}
-                        style={dangerButtonStyle}
-                      >
-                        Delete
-                      </button>
+                        <button
+                          onClick={() => deleteEmployee(employee.id)}
+                          style={{
+                            ...smallButtonStyle,
+                            color: '#fca5a5',
+                            borderColor: '#fca5a5',
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -325,155 +407,148 @@ export default function Employees() {
 
 const backButtonStyle = {
   backgroundColor: '#1e293b',
-  border: '1px solid #334155',
   color: '#fff',
+  border: '1px solid #334155',
   padding: '10px 16px',
   borderRadius: '8px',
   cursor: 'pointer',
-  marginBottom: '24px',
-  fontWeight: '600',
+  marginBottom: '28px',
+  fontWeight: '800',
 };
 
 const headerStyle = {
-  borderBottom: '1px solid #334155',
-  paddingBottom: '20px',
-  marginBottom: '24px',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  gap: '16px',
-  flexWrap: 'wrap',
+  marginBottom: '24px',
+  borderBottom: '1px solid #334155',
+  paddingBottom: '20px',
 };
 
 const titleStyle = {
-  fontSize: '2rem',
-  fontWeight: 'bold',
-  color: '#38bdf8',
   margin: 0,
+  color: '#38bdf8',
+  fontSize: '2rem',
 };
 
 const subtitleStyle = {
   color: '#94a3b8',
-  fontSize: '0.95rem',
   marginTop: '6px',
 };
 
 const counterStyle = {
   display: 'flex',
-  gap: '14px',
+  gap: '12px',
+  marginTop: '12px',
   flexWrap: 'wrap',
-  marginTop: '10px',
-  fontSize: '0.82rem',
-  fontWeight: '600',
 };
 
 const counterItemStyle = {
+  backgroundColor: '#1e293b',
+  border: '1px solid #334155',
   color: '#cbd5e1',
-  backgroundColor: 'rgba(148, 163, 184, 0.08)',
-  border: '1px solid rgba(148, 163, 184, 0.18)',
-  padding: '5px 9px',
+  padding: '6px 10px',
   borderRadius: '999px',
+  fontSize: '0.78rem',
+  fontWeight: '800',
 };
 
 const cardStyle = {
   backgroundColor: '#1e293b',
   border: '1px solid #334155',
   borderRadius: '14px',
-  padding: '22px',
-  marginBottom: '20px',
+  padding: '18px',
+  marginBottom: '18px',
 };
 
 const labelStyle = {
   display: 'block',
-  marginBottom: '8px',
   color: '#cbd5e1',
-  fontWeight: '700',
+  fontSize: '0.85rem',
+  fontWeight: '800',
+  marginBottom: '8px',
 };
 
 const inputStyle = {
-  flex: '1',
+  flex: 1,
   minWidth: '260px',
-  boxSizing: 'border-box',
   backgroundColor: '#0f172a',
-  color: '#f8fafc',
   border: '1px solid #334155',
-  borderRadius: '10px',
+  color: '#f8fafc',
   padding: '12px',
-  fontSize: '1rem',
+  borderRadius: '8px',
   outline: 'none',
+  fontWeight: '700',
 };
 
 const addButtonStyle = {
-  backgroundColor: 'rgba(56, 189, 248, 0.14)',
-  color: '#7dd3fc',
-  border: '1px solid rgba(56, 189, 248, 0.35)',
-  padding: '10px 16px',
-  borderRadius: '10px',
-  fontWeight: '800',
+  backgroundColor: '#22c55e',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '8px',
+  padding: '12px 18px',
+  fontWeight: '900',
   cursor: 'pointer',
 };
 
+const refreshButtonStyle = {
+  backgroundColor: '#0f172a',
+  color: '#38bdf8',
+  border: '1px solid #334155',
+  borderRadius: '8px',
+  padding: '8px 12px',
+  fontWeight: '900',
+  cursor: 'pointer',
+};
 
 const tableContainerStyle = {
   backgroundColor: '#1e293b',
   border: '1px solid #334155',
   borderRadius: '14px',
-  overflow: 'auto',
+  overflow: 'hidden',
 };
 
 const tableHeaderStyle = {
-  padding: '16px 20px',
+  padding: '16px 18px',
   borderBottom: '1px solid #334155',
-  fontWeight: '800',
-  color: '#f8fafc',
+  fontWeight: '900',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
   gap: '12px',
 };
 
-const emptyStyle = {
-  padding: '30px',
-  color: '#94a3b8',
-  textAlign: 'center',
-};
-
 const tableStyle = {
   width: '100%',
   borderCollapse: 'collapse',
-  minWidth: '720px',
 };
 
 const thStyle = {
-  padding: '12px',
+  padding: '13px',
   color: '#cbd5e1',
-  textAlign: 'left',
-  borderBottom: '1px solid #334155',
+  fontSize: '0.82rem',
+  textAlign: 'center',
 };
 
 const tdStyle = {
-  padding: '12px',
+  padding: '13px',
+  borderTop: '1px solid #334155',
   color: '#f8fafc',
-  borderBottom: '1px solid #334155',
+  textAlign: 'center',
 };
 
-const softButtonStyle = {
-  backgroundColor: 'rgba(148, 163, 184, 0.12)',
-  color: '#cbd5e1',
-  border: '1px solid rgba(148, 163, 184, 0.25)',
+const smallButtonStyle = {
+  backgroundColor: 'transparent',
+  border: '1px solid',
   borderRadius: '8px',
   padding: '7px 10px',
-  fontWeight: '700',
+  fontWeight: '900',
   cursor: 'pointer',
-  marginRight: '8px',
 };
 
-const dangerButtonStyle = {
-  backgroundColor: 'rgba(239, 68, 68, 0.12)',
-  color: '#fca5a5',
-  border: '1px solid rgba(239, 68, 68, 0.35)',
-  borderRadius: '8px',
-  padding: '7px 10px',
+const emptyStyle = {
+  padding: '28px',
+  textAlign: 'center',
+  color: '#94a3b8',
   fontWeight: '700',
-  cursor: 'pointer',
 };

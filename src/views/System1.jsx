@@ -337,46 +337,63 @@ export default function System1() {
   const [tempTimeOut, setTempTimeOut] = useState('');
   const [tempRole, setTempRole] = useState('S1');
 
-  const employeesList = (() => {
-    try {
-      const savedEmployees = localStorage.getItem('employees_list');
+  const [employeesList, setEmployeesList] = useState([]);
 
-      if (savedEmployees) {
-        const parsed = JSON.parse(savedEmployees);
+  useEffect(() => {
+    let isMounted = true;
 
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter((emp) => emp && emp.active !== false && emp.name)
-            .map((emp) => ({
-              id: emp.id || emp.name,
-              name: String(emp.name).trim().replace(/\s+/g, ' ').toUpperCase(),
-              active: true,
-            }));
+    const normalizeEmployee = (employee) => ({
+      id: employee.id || employee.name,
+      name: String(employee.name || '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toUpperCase(),
+      active: employee.active !== false,
+    });
+
+    const loadAttendanceEmployees = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('employees')
+          .select('id, name, active')
+          .eq('active', true)
+          .order('name', { ascending: true });
+
+        if (error) {
+          console.error('Unable to load employees from Supabase:', error);
+          return;
         }
+
+        if (!isMounted) return;
+
+        setEmployeesList(
+          (data || [])
+            .filter((employee) => employee && employee.name)
+            .map(normalizeEmployee)
+        );
+      } catch (error) {
+        console.error('Unexpected employee load error:', error);
       }
+    };
 
-      const savedAttendance = localStorage.getItem('attendance_master_list');
+    loadAttendanceEmployees();
 
-      if (savedAttendance) {
-        const parsed = JSON.parse(savedAttendance);
-
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter(Boolean)
-            .map((name) => ({
-              id: name,
-              name: String(name).trim().replace(/\s+/g, ' ').toUpperCase(),
-              active: true,
-            }));
+    const channel = supabase
+      .channel('system1-employees-list')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'employees' },
+        () => {
+          loadAttendanceEmployees();
         }
-      }
+      )
+      .subscribe();
 
-      return [];
-    } catch (error) {
-      console.error('Unable to load attendance employee list:', error);
-      return [];
-    }
-  })();
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const filteredEmployees = employeeSearch.trim()
     ? employeesList.filter((emp) =>
@@ -529,7 +546,6 @@ export default function System1() {
 
   const formatDateCodeInput = (value) => {
     const raw = String(value || '').trim();
-
     if (!raw) return '';
 
     let mm = '';
@@ -538,7 +554,6 @@ export default function System1() {
 
     if (raw.includes('/')) {
       const parts = raw.split('/').map((part) => part.trim());
-
       if (parts.length !== 3) return raw;
 
       mm = parts[0];
@@ -562,19 +577,25 @@ export default function System1() {
 
     if (yyyy.length === 2) yyyy = `20${yyyy}`;
 
-    const month = normalizeDatePart(mm);
-    const day = normalizeDatePart(dd);
+    const monthNumber = parseInt(mm, 10);
+    const dayNumber = parseInt(dd, 10);
     const year = String(yyyy || '').replace(/\D/g, '');
 
-    if (!month || !day || year.length !== 4) return raw;
-
-    const monthNumber = parseInt(month, 10);
-    const dayNumber = parseInt(day, 10);
+    if (
+      Number.isNaN(monthNumber) ||
+      Number.isNaN(dayNumber) ||
+      year.length !== 4
+    ) {
+      return raw;
+    }
 
     if (monthNumber < 1 || monthNumber > 12) return raw;
     if (dayNumber < 1 || dayNumber > 31) return raw;
 
-    return `${monthNumber}/${dayNumber}/${year}`;
+    const finalMonth = String(monthNumber).padStart(2, '0');
+    const finalDay = String(dayNumber).padStart(2, '0');
+
+    return `${finalMonth}/${finalDay}/${year}`;
   };
 
   const formatDateCodeTyping = (value, inputType = '') => {
@@ -583,19 +604,13 @@ export default function System1() {
     // Let Backspace/Delete behave like a normal text field.
     if (String(inputType || '').startsWith('delete')) return raw;
 
-    // If the user is typing slashes manually, do not rearrange the value.
-    if (raw.includes('/')) return raw;
-
     const digits = raw.replace(/\D/g, '').slice(0, 8);
 
     if (!digits) return '';
     if (digits.length <= 2) return digits;
     if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-    if (digits.length <= 6) {
-      return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
-    }
 
-    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
   };
 
   const labelYear = getDateParts().yy;
