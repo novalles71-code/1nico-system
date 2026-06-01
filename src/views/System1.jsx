@@ -335,6 +335,7 @@ export default function System1() {
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [tempTimeIn, setTempTimeIn] = useState('');
   const [tempTimeOut, setTempTimeOut] = useState('');
+  const [tempRole, setTempRole] = useState('S1');
 
   const employeesList = (() => {
     const saved = localStorage.getItem('employees_list');
@@ -354,6 +355,12 @@ export default function System1() {
     );
   }, [attendanceRows]);
 
+  const focusAttendanceField = (id) => {
+    setTimeout(() => {
+      document.getElementById(id)?.focus();
+    }, 50);
+  };
+
   const addAttendanceRow = () => {
     if (!selectedEmployee) return;
 
@@ -363,7 +370,8 @@ export default function System1() {
         id: Date.now(),
         name: selectedEmployee,
         timeIn: tempTimeIn,
-        timeOut: '',
+        timeOut: tempTimeOut,
+        role: tempRole,
       },
     ]);
 
@@ -371,23 +379,54 @@ export default function System1() {
     setSelectedEmployee('');
     setTempTimeIn('');
     setTempTimeOut('');
+    setTempRole('S1');
 
-    setTimeout(() => {
-      document.getElementById('attendance-search-input')?.focus();
-    }, 50);
+    focusAttendanceField('attendance-search-input');
   };
 
-  const handleAttendanceKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addAttendanceRow();
+  const handleAttendanceSearchKeyDown = (e) => {
+    if (e.key !== 'Enter') return;
+
+    e.preventDefault();
+
+    if (selectedEmployee) {
+      focusAttendanceField('attendance-time-in');
+      return;
     }
+
+    if (filteredEmployees.length > 0) {
+      const firstMatch = filteredEmployees[0];
+      setSelectedEmployee(firstMatch.name);
+      setEmployeeSearch(firstMatch.name);
+      focusAttendanceField('attendance-time-in');
+    }
+  };
+
+  const moveToNextAttendanceField = (e, nextId) => {
+    if (e.key !== 'Enter') return;
+
+    e.preventDefault();
+
+    if (nextId === 'add') {
+      addAttendanceRow();
+      return;
+    }
+
+    document.getElementById(nextId)?.focus();
   };
 
   const handleAttendanceTimeChange = (id, field, value) => {
     setAttendanceRows((prev) =>
       prev.map((row) =>
         row.id === id ? { ...row, [field]: value } : row
+      )
+    );
+  };
+
+  const handleAttendanceRoleChange = (id, value) => {
+    setAttendanceRows((prev) =>
+      prev.map((row) =>
+        row.id === id ? { ...row, role: value } : row
       )
     );
   };
@@ -639,7 +678,7 @@ export default function System1() {
 ^CI28
 ^PW812
 ^LL1624
-^LH0,90
+^LH0,120
 ^MD18
 ^PR4
 ^FO70,70^A0N,30,30^FDITEM#:^FS
@@ -737,7 +776,7 @@ export default function System1() {
     },
     {
       title: 'Labels',
-      desc: 'Label Format.',
+      desc: 'Label Format. White Label',
       icon: <ClipboardCheck size={24} />,
     },
 
@@ -1112,7 +1151,7 @@ const tabs = [
       </h3>
 
       <p style={{ margin: '6px 0 0 0', color: '#64748b', fontSize: '0.9rem', fontWeight: '500' }}>
-        Search employee, enter Time In, then press Enter or Add.
+        Search employee, select name, enter Time In, Time Out, Role, then press Enter on Add.
       </p>
     </div>
 
@@ -1120,10 +1159,11 @@ const tabs = [
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 150px 100px',
+          gridTemplateColumns: '1fr 130px 130px 120px 100px',
           gap: '12px',
           marginBottom: '20px',
           position: 'relative',
+          alignItems: 'stretch',
         }}
       >
         <div style={{ position: 'relative' }}>
@@ -1136,7 +1176,7 @@ const tabs = [
               setEmployeeSearch(e.target.value);
               setSelectedEmployee('');
             }}
-            onKeyDown={handleAttendanceKeyDown}
+            onKeyDown={handleAttendanceSearchKeyDown}
             style={{
               width: '100%',
               padding: '10px',
@@ -1171,6 +1211,7 @@ const tabs = [
                   onClick={() => {
                     setSelectedEmployee(emp.name);
                     setEmployeeSearch(emp.name);
+                    focusAttendanceField('attendance-time-in');
                   }}
                   style={{
                     padding: '10px',
@@ -1188,23 +1229,69 @@ const tabs = [
         </div>
 
         <input
+          id="attendance-time-in"
           type="text"
           placeholder="Time In"
           maxLength={5}
           value={tempTimeIn}
           onChange={(e) => setTempTimeIn(e.target.value)}
-          onKeyDown={handleAttendanceKeyDown}
+          onKeyDown={(e) => moveToNextAttendanceField(e, 'attendance-time-out')}
           style={{
             padding: '10px',
             border: '1px solid #cbd5e1',
             borderRadius: '6px',
             textAlign: 'center',
             outline: 'none',
+            fontWeight: '700',
+            color: '#334155',
           }}
         />
 
+        <input
+          id="attendance-time-out"
+          type="text"
+          placeholder="Time Out"
+          maxLength={5}
+          value={tempTimeOut}
+          onChange={(e) => setTempTimeOut(e.target.value)}
+          onKeyDown={(e) => moveToNextAttendanceField(e, 'attendance-role')}
+          style={{
+            padding: '10px',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            textAlign: 'center',
+            outline: 'none',
+            fontWeight: '700',
+            color: '#334155',
+          }}
+        />
+
+        <select
+          id="attendance-role"
+          value={tempRole}
+          onChange={(e) => setTempRole(e.target.value)}
+          onKeyDown={(e) => moveToNextAttendanceField(e, 'attendance-add-button')}
+          style={{
+            padding: '10px',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            textAlign: 'center',
+            outline: 'none',
+            fontWeight: '800',
+            backgroundColor: '#fff',
+            color: '#334155',
+          }}
+        >
+          <option value="QC">QC</option>
+          <option value="S1">S1</option>
+          <option value="OP">OP</option>
+        </select>
+
         <button
+          id="attendance-add-button"
+          type="button"
           onClick={addAttendanceRow}
+          onKeyDown={(e) => moveToNextAttendanceField(e, 'add')}
           style={{
             backgroundColor: '#dc2626',
             color: '#fff',
@@ -1230,9 +1317,10 @@ const tabs = [
           <thead>
             <tr style={{ backgroundColor: '#e2e8f0' }}>
               <th style={attendanceThLeft}>#</th>
-              <th style={attendanceTh}>Staffing</th>
+              <th style={attendanceTh}>Employee</th>
               <th style={attendanceThTime}>Time In</th>
               <th style={attendanceThTime}>Time Out</th>
+              <th style={attendanceTh}>Role</th>
               <th style={attendanceThAction}>Action</th>
             </tr>
           </thead>
@@ -1241,7 +1329,7 @@ const tabs = [
             {attendanceRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   style={{
                     padding: '24px',
                     textAlign: 'center',
@@ -1289,6 +1377,22 @@ const tabs = [
                     />
                   </td>
 
+                  <td style={attendanceTdInput}>
+                    <select
+                      value={row.role || 'S1'}
+                      onChange={(e) => handleAttendanceRoleChange(row.id, e.target.value)}
+                      style={{
+                        ...attendanceTimeInput,
+                        fontWeight: '800',
+                        backgroundColor: '#fff',
+                      }}
+                    >
+                      <option value="QC">QC</option>
+                      <option value="S1">S1</option>
+                      <option value="OP">OP</option>
+                    </select>
+                  </td>
+
                   <td style={attendanceTdAction}>
                     <button
                       onClick={() => deleteAttendanceRow(row.id)}
@@ -1329,7 +1433,7 @@ const tabs = [
             fontWeight: '500',
           }}
         >
-          Names are loaded from the Employees module. Time Out can be entered later in the table.
+          Names are loaded from the Employees module. Role options: QC, S1, OP.
         </div>
 
         <button
@@ -1373,6 +1477,7 @@ const tabs = [
       name: row.name,
       timeIn: row.timeIn,
       timeOut: row.timeOut,
+      role: row.role || 'S1',
       system: 'S1',
     }));
 
