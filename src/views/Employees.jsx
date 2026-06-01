@@ -113,7 +113,16 @@ export default function Employees() {
 
   const saveEmployees = (newList) => {
     setEmployees(newList);
+
     localStorage.setItem('employees_list', JSON.stringify(newList));
+
+    const activeNames = newList
+      .filter((employee) => employee && employee.active !== false && employee.name)
+      .map((employee) =>
+        String(employee.name).trim().replace(/\s+/g, ' ').toUpperCase()
+      );
+
+    localStorage.setItem('attendance_master_list', JSON.stringify(activeNames));
   };
 
   const addEmployee = () => {

@@ -338,8 +338,44 @@ export default function System1() {
   const [tempRole, setTempRole] = useState('S1');
 
   const employeesList = (() => {
-    const saved = localStorage.getItem('employees_list');
-    return saved ? JSON.parse(saved).filter((emp) => emp.active) : [];
+    try {
+      const savedEmployees = localStorage.getItem('employees_list');
+
+      if (savedEmployees) {
+        const parsed = JSON.parse(savedEmployees);
+
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((emp) => emp && emp.active !== false && emp.name)
+            .map((emp) => ({
+              id: emp.id || emp.name,
+              name: String(emp.name).trim().replace(/\s+/g, ' ').toUpperCase(),
+              active: true,
+            }));
+        }
+      }
+
+      const savedAttendance = localStorage.getItem('attendance_master_list');
+
+      if (savedAttendance) {
+        const parsed = JSON.parse(savedAttendance);
+
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter(Boolean)
+            .map((name) => ({
+              id: name,
+              name: String(name).trim().replace(/\s+/g, ' ').toUpperCase(),
+              active: true,
+            }));
+        }
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Unable to load attendance employee list:', error);
+      return [];
+    }
   })();
 
   const filteredEmployees = employeeSearch.trim()
@@ -484,46 +520,61 @@ export default function System1() {
   const normalizeDatePart = (part) => {
     const cleaned = String(part || '').replace(/\D/g, '');
     if (!cleaned) return '';
-    return String(parseInt(cleaned, 10));
+
+    const number = parseInt(cleaned, 10);
+    if (Number.isNaN(number)) return '';
+
+    return String(number);
   };
 
   const formatDateCodeInput = (value) => {
     const raw = String(value || '').trim();
-    const digits = raw.replace(/\D/g, '');
 
-    if (!digits) return '';
+    if (!raw) return '';
 
     let mm = '';
     let dd = '';
     let yyyy = '';
 
-    if (digits.length === 6) {
-      mm = digits.slice(0, 2);
-      dd = digits.slice(2, 4);
-      yyyy = `20${digits.slice(4, 6)}`;
-    } else if (digits.length === 8) {
-      mm = digits.slice(0, 2);
-      dd = digits.slice(2, 4);
-      yyyy = digits.slice(4, 8);
-    } else {
-      const parts = raw.split('/').filter(Boolean);
+    if (raw.includes('/')) {
+      const parts = raw.split('/').map((part) => part.trim());
 
-      if (parts.length === 3) {
-        mm = parts[0];
-        dd = parts[1];
-        yyyy = parts[2];
-        if (yyyy.length === 2) yyyy = `20${yyyy}`;
+      if (parts.length !== 3) return raw;
+
+      mm = parts[0];
+      dd = parts[1];
+      yyyy = parts[2];
+    } else {
+      const digits = raw.replace(/\D/g, '');
+
+      if (digits.length === 6) {
+        mm = digits.slice(0, 2);
+        dd = digits.slice(2, 4);
+        yyyy = `20${digits.slice(4, 6)}`;
+      } else if (digits.length === 8) {
+        mm = digits.slice(0, 2);
+        dd = digits.slice(2, 4);
+        yyyy = digits.slice(4, 8);
       } else {
         return raw;
       }
     }
 
+    if (yyyy.length === 2) yyyy = `20${yyyy}`;
+
     const month = normalizeDatePart(mm);
     const day = normalizeDatePart(dd);
+    const year = String(yyyy || '').replace(/\D/g, '');
 
-    if (!month || !day || yyyy.length !== 4) return raw;
+    if (!month || !day || year.length !== 4) return raw;
 
-    return `${month}/${day}/${yyyy}`;
+    const monthNumber = parseInt(month, 10);
+    const dayNumber = parseInt(day, 10);
+
+    if (monthNumber < 1 || monthNumber > 12) return raw;
+    if (dayNumber < 1 || dayNumber > 31) return raw;
+
+    return `${monthNumber}/${dayNumber}/${year}`;
   };
 
   const formatDateCodeTyping = (value, inputType = '') => {
@@ -532,14 +583,17 @@ export default function System1() {
     // Let Backspace/Delete behave like a normal text field.
     if (String(inputType || '').startsWith('delete')) return raw;
 
+    // If the user is typing slashes manually, do not rearrange the value.
+    if (raw.includes('/')) return raw;
+
     const digits = raw.replace(/\D/g, '').slice(0, 8);
 
     if (!digits) return '';
-    if (digits.length < 2) return digits;
-    if (digits.length === 2) return `${digits}/`;
-    if (digits.length < 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-    if (digits.length === 4) return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/`;
-    if (digits.length === 6) return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/20${digits.slice(4, 6)}`;
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    if (digits.length <= 6) {
+      return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    }
 
     return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
   };

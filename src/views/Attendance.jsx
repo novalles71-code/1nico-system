@@ -164,6 +164,35 @@ export default function Attendance() {
   });
 
   useEffect(() => {
+    const savedEmployees = localStorage.getItem('employees_list');
+
+    if (savedEmployees) {
+      try {
+        const parsed = JSON.parse(savedEmployees);
+
+        const activeNames = parsed
+          .filter((employee) => employee && employee.active !== false && employee.name)
+          .map((employee) =>
+            String(employee.name).trim().replace(/\s+/g, ' ').toUpperCase()
+          );
+
+        localStorage.setItem('attendance_master_list', JSON.stringify(activeNames));
+        return;
+      } catch (error) {
+        console.error('Unable to sync attendance master list:', error);
+      }
+    }
+
+    const cleanEmployees = ORDERED_EMPLOYEES.filter((name) => {
+      if (!name) return false;
+      return !SECTION_NAMES.includes(name);
+    });
+
+    localStorage.setItem('attendance_master_list', JSON.stringify(cleanEmployees));
+  }, []);
+
+
+  useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(weeklyData));
   }, [weeklyData, storageKey]);
 
