@@ -157,8 +157,6 @@ function getWeekInfo() {
 export default function Attendance() {
   const navigate = useNavigate();
   const { monday, weekKey, weekLabel } = getWeekInfo();
-  const storageKey = `weekly_attendance_data_${weekKey}`;
-
   const [weeklyData, setWeeklyData] = useState({});
   const [loadingAttendance, setLoadingAttendance] = useState(true);
 
@@ -265,9 +263,11 @@ export default function Attendance() {
 
         if (record) {
           days[day] = {
+            id: record.id,
             timeIn: record.timeIn || '',
             timeOut: record.timeOut || '',
             area: record.role || record.system || '',
+            system: record.system || '',
           };
         }
       });
@@ -289,6 +289,176 @@ export default function Attendance() {
     });
   };
 
+  const updateLocalAttendanceCell = (day, recordId, field, value) => {
+    setWeeklyData((prev) => {
+      const dayRecords = prev[day] || [];
+
+      const updatedDayRecords = dayRecords.map((record) => {
+        if (record.id !== recordId) return record;
+
+        if (field === 'timeIn') {
+          return { ...record, timeIn: value };
+        }
+
+        if (field === 'timeOut') {
+          return { ...record, timeOut: value };
+        }
+
+        return { ...record, role: value };
+      });
+
+      return {
+        ...prev,
+        [day]: updatedDayRecords,
+      };
+    });
+  };
+
+  const removeLocalAttendanceRecord = (day, recordId) => {
+    setWeeklyData((prev) => {
+      const dayRecords = prev[day] || [];
+
+      return {
+        ...prev,
+        [day]: dayRecords.filter((record) => record.id !== recordId),
+      };
+    });
+  };
+
+  const saveAttendanceCellEdit = async (person, day, field, value) => {
+    const record = person.days?.[day];
+    const cleanValue = String(value || '').trim().toUpperCase();
+
+    const getSystemFromValue = (valueToCheck) => {
+      const normalized = String(valueToCheck || '').trim().toUpperCase();
+      return ['S1', 'S2', 'S3', 'S4'].includes(normalized) ? normalized : '';
+    };
+
+    const getFallbackSystem = () => {
+      if (field === 'area') {
+        const systemFromArea = getSystemFromValue(cleanValue);
+        if (systemFromArea) return systemFromArea;
+      }
+
+      if (record?.system) return record.system;
+
+      for (const dayName of DAYS) {
+        const existingSystem = person.days?.[dayName]?.system;
+        if (existingSystem) return existingSystem;
+      }
+
+      return 'S1';
+    };
+
+    const fallbackSystem = getFallbackSystem();
+
+    const nextRecord = {
+      id: record?.id || null,
+      timeIn: record?.timeIn || '',
+      timeOut: record?.timeOut || '',
+      area: record?.area || '',
+      system: record?.system || fallbackSystem,
+      [field]: cleanValue,
+    };
+
+    const shouldDelete =
+      record?.id &&
+      !String(nextRecord.timeIn || '').trim() &&
+      !String(nextRecord.timeOut || '').trim() &&
+      !String(nextRecord.area || '').trim();
+
+    if (shouldDelete) {
+      const { error } = await supabase
+        .from('attendance_records')
+        .delete()
+        .eq('id', record.id);
+
+      if (error) {
+        console.error('Delete attendance record error:', error);
+        alert('Unable to delete attendance record.');
+        return;
+      }
+
+      removeLocalAttendanceRecord(day, record.id);
+      return;
+    }
+
+    if (!record?.id) {
+      const roleValue = field === 'area' ? cleanValue || fallbackSystem : fallbackSystem;
+      const systemValue = getSystemFromValue(roleValue) || fallbackSystem;
+
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .insert({
+          week_key: weekKey,
+          day_name: day,
+          employee_name: person.name,
+          time_in: field === 'timeIn' ? cleanValue || null : null,
+          time_out: field === 'timeOut' ? cleanValue || null : null,
+          role: roleValue,
+          system: systemValue,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Create attendance record error:', error);
+        alert('Unable to create attendance record.');
+        return;
+      }
+
+      setWeeklyData((prev) => ({
+        ...prev,
+        [day]: [
+          ...(prev[day] || []),
+          {
+            id: data.id,
+            name: data.employee_name,
+            timeIn: data.time_in || '',
+            timeOut: data.time_out || '',
+            role: data.role || data.system || '',
+            system: data.system || systemValue,
+          },
+        ],
+      }));
+
+      return;
+    }
+
+    const updatePayload = {};
+
+    if (field === 'timeIn') {
+      updatePayload.time_in = cleanValue || null;
+    } else if (field === 'timeOut') {
+      updatePayload.time_out = cleanValue || null;
+    } else {
+      const systemValue = getSystemFromValue(cleanValue) || record.system || fallbackSystem;
+      updatePayload.role = cleanValue || null;
+      updatePayload.system = systemValue;
+    }
+
+    const { error } = await supabase
+      .from('attendance_records')
+      .update(updatePayload)
+      .eq('id', record.id);
+
+    if (error) {
+      console.error('Update attendance record error:', error);
+      alert('Unable to update attendance record.');
+      return;
+    }
+
+    updateLocalAttendanceCell(day, record.id, field, cleanValue);
+  };
+
+  const handleEditableCellKeyDown = (event, person, day, field) => {
+    if (event.key !== 'Enter') return;
+
+    event.preventDefault();
+    event.currentTarget.blur();
+    saveAttendanceCellEdit(person, day, field, event.currentTarget.value);
+  };
+
   const downloadExcel = async () => {
     const workedRows = employeeRows.filter(hasWorked);
 
@@ -296,6 +466,38 @@ export default function Attendance() {
       alert('No attendance records to download.');
       return;
     }
+
+    const systemOrder = ['S1', 'S2', 'S3', 'S4'];
+
+    const getBaseSystem = (person) => {
+      const mondayRecord = person.days?.Monday;
+
+      if (mondayRecord?.system) {
+        return mondayRecord.system;
+      }
+
+      for (const day of DAYS) {
+        const record = person.days?.[day];
+
+        if (record?.system) {
+          return record.system;
+        }
+      }
+
+      return 'S4';
+    };
+
+    const orderedWorkedRows = [...workedRows].sort((a, b) => {
+      const aSystemIndex = systemOrder.indexOf(getBaseSystem(a));
+      const bSystemIndex = systemOrder.indexOf(getBaseSystem(b));
+
+      const safeAIndex = aSystemIndex === -1 ? 99 : aSystemIndex;
+      const safeBIndex = bSystemIndex === -1 ? 99 : bSystemIndex;
+
+      if (safeAIndex !== safeBIndex) return safeAIndex - safeBIndex;
+
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
 
     const workbook = new ExcelJS.Workbook();
 
@@ -326,6 +528,13 @@ export default function Attendance() {
     }
 
     const borderStyle = {
+      top: { style: 'medium', color: { argb: 'FF000000' } },
+      left: { style: 'medium', color: { argb: 'FF000000' } },
+      bottom: { style: 'medium', color: { argb: 'FF000000' } },
+      right: { style: 'medium', color: { argb: 'FF000000' } },
+    };
+
+    const thinBorderStyle = {
       top: { style: 'thin', color: { argb: 'FF000000' } },
       left: { style: 'thin', color: { argb: 'FF000000' } },
       bottom: { style: 'thin', color: { argb: 'FF000000' } },
@@ -381,8 +590,26 @@ export default function Attendance() {
     });
 
     let currentRow = 3;
+    let previousSystem = null;
 
-    workedRows.forEach((person) => {
+    orderedWorkedRows.forEach((person) => {
+      const currentSystem = getBaseSystem(person);
+
+      if (previousSystem && previousSystem !== currentSystem) {
+        const spacerRow = worksheet.getRow(currentRow);
+
+        for (let col = 1; col <= 22; col += 1) {
+          const cell = spacerRow.getCell(col);
+          cell.value = '';
+          cell.border = thinBorderStyle;
+        }
+
+        spacerRow.height = 12;
+        currentRow += 1;
+      }
+
+      previousSystem = currentSystem;
+
       const row = worksheet.getRow(currentRow);
 
       row.getCell(1).value = person.name;
@@ -397,13 +624,33 @@ export default function Attendance() {
         row.getCell(startCol + 1).value = record?.timeOut || '';
         row.getCell(startCol + 2).value = record?.area || '';
 
+        if (record?.timeIn || record?.timeOut || record?.area) {
+          row.getCell(startCol).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFDDEBF7' },
+          };
+
+          row.getCell(startCol + 1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFDDEBF7' },
+          };
+
+          row.getCell(startCol + 2).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFDDEBF7' },
+          };
+        }
+
         row.getCell(startCol).alignment = center;
         row.getCell(startCol + 1).alignment = center;
         row.getCell(startCol + 2).alignment = center;
 
-        row.getCell(startCol).font = { name: 'Calibri', size: 11 };
-        row.getCell(startCol + 1).font = { name: 'Calibri', size: 11 };
-        row.getCell(startCol + 2).font = { name: 'Calibri', size: 11 };
+        row.getCell(startCol).font = { name: 'Calibri', size: 11, bold: true };
+        row.getCell(startCol + 1).font = { name: 'Calibri', size: 11, bold: true };
+        row.getCell(startCol + 2).font = { name: 'Calibri', size: 11, bold: true };
       });
 
       for (let col = 1; col <= 22; col += 1) {
@@ -417,6 +664,12 @@ export default function Attendance() {
     worksheet.eachRow((row) => {
       row.eachCell({ includeEmpty: true }, (cell) => {
         cell.border = cell.border || borderStyle;
+        cell.font = {
+          name: cell.font?.name || 'Calibri',
+          size: cell.font?.size || 11,
+          bold: true,
+          italic: cell.font?.italic || false,
+        };
       });
     });
 
@@ -442,7 +695,6 @@ export default function Attendance() {
 
     setWeeklyData({});
   };
-
   const resetWeek = async () => {
     const confirmReset = confirm(
       'Download the Excel file before resetting. Reset this weekly attendance?'
@@ -638,9 +890,35 @@ export default function Attendance() {
 
                         return (
                           <React.Fragment key={`${person.name}-${day}`}>
-                            <td style={tdSmall}>{record?.timeIn || ''}</td>
-                            <td style={tdSmall}>{record?.timeOut || ''}</td>
-                            <td style={tdSmall}>{record?.area || ''}</td>
+                            <td style={tdSmall}>
+                              <input
+                                defaultValue={record?.timeIn || ''}
+                                onKeyDown={(event) =>
+                                  handleEditableCellKeyDown(event, person, day, 'timeIn')
+                                }
+                                style={editableCellInput}
+                              />
+                            </td>
+
+                            <td style={tdSmall}>
+                              <input
+                                defaultValue={record?.timeOut || ''}
+                                onKeyDown={(event) =>
+                                  handleEditableCellKeyDown(event, person, day, 'timeOut')
+                                }
+                                style={editableCellInput}
+                              />
+                            </td>
+
+                            <td style={tdSmall}>
+                              <input
+                                defaultValue={record?.area || ''}
+                                onKeyDown={(event) =>
+                                  handleEditableCellKeyDown(event, person, day, 'area')
+                                }
+                                style={editableCellInput}
+                              />
+                            </td>
                           </React.Fragment>
                         );
                       })}
@@ -698,6 +976,19 @@ const tdSmall = {
   color: '#111827',
   fontWeight: '600',
   height: '26px',
+};
+
+const editableCellInput = {
+  width: '100%',
+  border: 'none',
+  outline: 'none',
+  backgroundColor: 'transparent',
+  color: '#111827',
+  fontWeight: '700',
+  textAlign: 'center',
+  fontSize: '0.78rem',
+  fontFamily: 'system-ui, sans-serif',
+  padding: 0,
 };
 
 const sectionTd = {
