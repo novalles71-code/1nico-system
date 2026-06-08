@@ -256,9 +256,9 @@ export default function Attendance() {
         nextWeeklyData[dayName].push({
           id: record.id,
           name: record.employee_name,
-          timeIn: record.time_in || '',
-          timeOut: record.time_out || '',
-          role: record.role || record.system || '',
+          timeIn: normalizeTimeValue(record.time_in || ''),
+          timeOut: normalizeTimeValue(record.time_out || ''),
+          role: record.role || '',
           system: record.system || 'S1',
         });
       });
@@ -329,7 +329,7 @@ export default function Attendance() {
             id: record.id,
             timeIn: record.timeIn || '',
             timeOut: record.timeOut || '',
-            area: record.role || record.system || '',
+            area: record.role || '',
             system: record.system || '',
           };
         }
@@ -352,22 +352,119 @@ export default function Attendance() {
     });
   };
 
-  const updateLocalAttendanceCell = (day, recordId, field, value) => {
+  const normalizeTimeValue = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+
+    if (raw.includes(':')) {
+      const [hourPart, minutePart = '00'] = raw.split(':');
+      const hour = parseInt(hourPart.replace(/\D/g, ''), 10);
+      const minute = parseInt(minutePart.replace(/\D/g, ''), 10);
+
+      if (Number.isNaN(hour)) return raw;
+
+      const safeHour = Math.max(0, Math.min(hour, 23));
+      const safeMinute = Number.isNaN(minute)
+        ? 0
+        : Math.max(0, Math.min(minute, 59));
+
+      return `${safeHour}:${String(safeMinute).padStart(2, '0')}`;
+    }
+
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return '';
+
+    if (digits.length <= 2) {
+      const hour = parseInt(digits, 10);
+      if (Number.isNaN(hour)) return raw;
+      return `${Math.max(0, Math.min(hour, 23))}:00`;
+    }
+
+    const hourDigits = digits.slice(0, -2);
+    const minuteDigits = digits.slice(-2);
+    const hour = parseInt(hourDigits, 10);
+    const minute = parseInt(minuteDigits, 10);
+
+    if (Number.isNaN(hour)) return raw;
+
+    const safeHour = Math.max(0, Math.min(hour, 23));
+    const safeMinute = Number.isNaN(minute)
+      ? 0
+      : Math.max(0, Math.min(minute, 59));
+
+    return `${safeHour}:${String(safeMinute).padStart(2, '0')}`;
+  };
+
+  const normalizeCellValue = (field, value) => {
+    if (field === 'timeIn' || field === 'timeOut') {
+      return normalizeTimeValue(value);
+    }
+
+    return String(value || '').trim().toUpperCase();
+  };
+
+  const getSafeCellKey = (personName, day, field) =>
+    `${personName}-${day}-${field}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+  const getEditableCellId = (personName, day, field) =>
+    `attendance-cell-${getSafeCellKey(personName, day, field)}`;
+
+  const getEditableGroupValues = (person, day) => {
+    const timeInInput = document.getElementById(
+      getEditableCellId(person.name, day, 'timeIn')
+    );
+    const timeOutInput = document.getElementById(
+      getEditableCellId(person.name, day, 'timeOut')
+    );
+    const areaInput = document.getElementById(
+      getEditableCellId(person.name, day, 'area')
+    );
+
+    const values = {
+      timeIn: normalizeCellValue('timeIn', timeInInput?.value || ''),
+      timeOut: normalizeCellValue('timeOut', timeOutInput?.value || ''),
+      area: normalizeCellValue('area', areaInput?.value || ''),
+    };
+
+    if (timeInInput) timeInInput.value = values.timeIn;
+    if (timeOutInput) timeOutInput.value = values.timeOut;
+    if (areaInput) areaInput.value = values.area;
+
+    return values;
+  };
+
+  const getSystemFromValue = (valueToCheck) => {
+    const normalized = String(valueToCheck || '').trim().toUpperCase();
+    return ['S1', 'S2', 'S3', 'S4'].includes(normalized) ? normalized : '';
+  };
+
+  const getFallbackSystemForPerson = (person, record, areaValue) => {
+    const systemFromArea = getSystemFromValue(areaValue);
+    if (systemFromArea) return systemFromArea;
+    if (record?.system) return record.system;
+
+    for (const dayName of DAYS) {
+      const existingSystem = person.days?.[dayName]?.system;
+      if (existingSystem) return existingSystem;
+    }
+
+    return 'S1';
+  };
+
+  const updateLocalAttendanceRecord = (day, recordId, values, systemValue) => {
     setWeeklyData((prev) => {
       const dayRecords = prev[day] || [];
 
       const updatedDayRecords = dayRecords.map((record) => {
         if (record.id !== recordId) return record;
 
-        if (field === 'timeIn') {
-          return { ...record, timeIn: value };
-        }
-
-        if (field === 'timeOut') {
-          return { ...record, timeOut: value };
-        }
-
-        return { ...record, role: value };
+        return {
+          ...record,
+          timeIn: values.timeIn,
+          timeOut: values.timeOut,
+          role: values.area,
+          system: systemValue || record.system || 'S1',
+        };
       });
 
       return {
@@ -388,49 +485,17 @@ export default function Attendance() {
     });
   };
 
-  const saveAttendanceCellEdit = async (person, day, field, value) => {
+  const saveAttendanceGroupEdit = async (person, day) => {
+    if (!person?.name || person.type !== 'employee') return;
+
     const record = person.days?.[day];
-    const cleanValue = String(value || '').trim().toUpperCase();
-
-    const getSystemFromValue = (valueToCheck) => {
-      const normalized = String(valueToCheck || '').trim().toUpperCase();
-      return ['S1', 'S2', 'S3', 'S4'].includes(normalized) ? normalized : '';
-    };
-
-    const getFallbackSystem = () => {
-      if (field === 'area') {
-        const systemFromArea = getSystemFromValue(cleanValue);
-        if (systemFromArea) return systemFromArea;
-      }
-
-      if (record?.system) return record.system;
-
-      for (const dayName of DAYS) {
-        const existingSystem = person.days?.[dayName]?.system;
-        if (existingSystem) return existingSystem;
-      }
-
-      return 'S1';
-    };
-
-    const fallbackSystem = getFallbackSystem();
-
-    const nextRecord = {
-      id: record?.id || null,
-      timeIn: record?.timeIn || '',
-      timeOut: record?.timeOut || '',
-      area: record?.area || '',
-      system: record?.system || fallbackSystem,
-      [field]: cleanValue,
-    };
-
+    const values = getEditableGroupValues(person, day);
     const shouldDelete =
-      record?.id &&
-      !String(nextRecord.timeIn || '').trim() &&
-      !String(nextRecord.timeOut || '').trim() &&
-      !String(nextRecord.area || '').trim();
+      !values.timeIn.trim() && !values.timeOut.trim() && !values.area.trim();
 
     if (shouldDelete) {
+      if (!record?.id) return;
+
       const { error } = await supabase
         .from('attendance_records')
         .delete()
@@ -446,19 +511,18 @@ export default function Attendance() {
       return;
     }
 
-    if (!record?.id) {
-      const roleValue = field === 'area' ? cleanValue || fallbackSystem : fallbackSystem;
-      const systemValue = getSystemFromValue(roleValue) || fallbackSystem;
+    const systemValue = getFallbackSystemForPerson(person, record, values.area);
 
+    if (!record?.id) {
       const { data, error } = await supabase
         .from('attendance_records')
         .insert({
           week_key: weekKey,
           day_name: day,
           employee_name: person.name,
-          time_in: field === 'timeIn' ? cleanValue || null : null,
-          time_out: field === 'timeOut' ? cleanValue || null : null,
-          role: roleValue,
+          time_in: values.timeIn || null,
+          time_out: values.timeOut || null,
+          role: values.area || null,
           system: systemValue,
         })
         .select()
@@ -477,9 +541,9 @@ export default function Attendance() {
           {
             id: data.id,
             name: data.employee_name,
-            timeIn: data.time_in || '',
-            timeOut: data.time_out || '',
-            role: data.role || data.system || '',
+            timeIn: normalizeTimeValue(data.time_in || ''),
+            timeOut: normalizeTimeValue(data.time_out || ''),
+            role: data.role || '',
             system: data.system || systemValue,
           },
         ],
@@ -488,21 +552,14 @@ export default function Attendance() {
       return;
     }
 
-    const updatePayload = {};
-
-    if (field === 'timeIn') {
-      updatePayload.time_in = cleanValue || null;
-    } else if (field === 'timeOut') {
-      updatePayload.time_out = cleanValue || null;
-    } else {
-      const systemValue = getSystemFromValue(cleanValue) || record.system || fallbackSystem;
-      updatePayload.role = cleanValue || null;
-      updatePayload.system = systemValue;
-    }
-
     const { error } = await supabase
       .from('attendance_records')
-      .update(updatePayload)
+      .update({
+        time_in: values.timeIn || null,
+        time_out: values.timeOut || null,
+        role: values.area || null,
+        system: systemValue,
+      })
       .eq('id', record.id);
 
     if (error) {
@@ -511,15 +568,39 @@ export default function Attendance() {
       return;
     }
 
-    updateLocalAttendanceCell(day, record.id, field, cleanValue);
+    updateLocalAttendanceRecord(day, record.id, values, systemValue);
   };
 
-  const handleEditableCellKeyDown = (event, person, day, field) => {
+  const focusNextEditableCell = (currentInput) => {
+    const editableCells = Array.from(
+      document.querySelectorAll('input[data-attendance-cell="true"]')
+    );
+
+    const currentIndex = editableCells.indexOf(currentInput);
+    const nextInput = editableCells[currentIndex + 1];
+
+    if (nextInput) {
+      setTimeout(() => {
+        nextInput.focus();
+        nextInput.select();
+      }, 20);
+    }
+  };
+
+  const handleEditableCellKeyDown = async (event, person, day) => {
     if (event.key !== 'Enter') return;
 
     event.preventDefault();
-    event.currentTarget.blur();
-    saveAttendanceCellEdit(person, day, field, event.currentTarget.value);
+    event.currentTarget.dataset.dirty = 'false';
+    await saveAttendanceGroupEdit(person, day);
+    focusNextEditableCell(event.currentTarget);
+  };
+
+  const handleEditableCellBlur = async (event, person, day) => {
+    if (event.currentTarget.dataset.dirty !== 'true') return;
+
+    event.currentTarget.dataset.dirty = 'false';
+    await saveAttendanceGroupEdit(person, day);
   };
 
   const downloadExcel = async () => {
@@ -1004,30 +1085,57 @@ export default function Attendance() {
                           <React.Fragment key={`${person.name}-${day}`}>
                             <td style={tdSmall}>
                               <input
+                                id={getEditableCellId(person.name, day, 'timeIn')}
+                                data-attendance-cell="true"
                                 defaultValue={record?.timeIn || ''}
-                                onKeyDown={(event) =>
-                                  handleEditableCellKeyDown(event, person, day, 'timeIn')
+                                onChange={(event) => {
+                                  event.currentTarget.dataset.dirty = 'true';
+                                }}
+                                onBlur={(event) =>
+                                  handleEditableCellBlur(event, person, day)
                                 }
+                                onKeyDown={(event) =>
+                                  handleEditableCellKeyDown(event, person, day)
+                                }
+                                onFocus={(event) => event.currentTarget.select()}
                                 style={editableCellInput}
                               />
                             </td>
 
                             <td style={tdSmall}>
                               <input
+                                id={getEditableCellId(person.name, day, 'timeOut')}
+                                data-attendance-cell="true"
                                 defaultValue={record?.timeOut || ''}
-                                onKeyDown={(event) =>
-                                  handleEditableCellKeyDown(event, person, day, 'timeOut')
+                                onChange={(event) => {
+                                  event.currentTarget.dataset.dirty = 'true';
+                                }}
+                                onBlur={(event) =>
+                                  handleEditableCellBlur(event, person, day)
                                 }
+                                onKeyDown={(event) =>
+                                  handleEditableCellKeyDown(event, person, day)
+                                }
+                                onFocus={(event) => event.currentTarget.select()}
                                 style={editableCellInput}
                               />
                             </td>
 
                             <td style={tdSmall}>
                               <input
+                                id={getEditableCellId(person.name, day, 'area')}
+                                data-attendance-cell="true"
                                 defaultValue={record?.area || ''}
-                                onKeyDown={(event) =>
-                                  handleEditableCellKeyDown(event, person, day, 'area')
+                                onChange={(event) => {
+                                  event.currentTarget.dataset.dirty = 'true';
+                                }}
+                                onBlur={(event) =>
+                                  handleEditableCellBlur(event, person, day)
                                 }
+                                onKeyDown={(event) =>
+                                  handleEditableCellKeyDown(event, person, day)
+                                }
+                                onFocus={(event) => event.currentTarget.select()}
                                 style={editableCellInput}
                               />
                             </td>
