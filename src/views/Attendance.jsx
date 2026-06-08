@@ -571,29 +571,78 @@ export default function Attendance() {
     updateLocalAttendanceRecord(day, record.id, values, systemValue);
   };
 
-  const focusNextEditableCell = (currentInput) => {
-    const editableCells = Array.from(
-      document.querySelectorAll('input[data-attendance-cell="true"]')
-    );
+  const focusEditableCell = (rowIndex, dayIndex, field) => {
+    setTimeout(() => {
+      for (let nextRowIndex = rowIndex; nextRowIndex < employeeRows.length; nextRowIndex += 1) {
+        const nextInput = document.querySelector(
+          `input[data-attendance-cell="true"][data-row-index="${nextRowIndex}"][data-day-index="${dayIndex}"][data-field="${field}"]`
+        );
 
-    const currentIndex = editableCells.indexOf(currentInput);
-    const nextInput = editableCells[currentIndex + 1];
+        if (nextInput) {
+          nextInput.focus();
+          nextInput.select();
+          return;
+        }
+      }
+    }, 30);
+  };
 
-    if (nextInput) {
-      setTimeout(() => {
+  const focusCellToRight = (currentInput) => {
+    const rowIndex = Number(currentInput.dataset.rowIndex);
+    const dayIndex = Number(currentInput.dataset.dayIndex);
+    const field = currentInput.dataset.field;
+    const fieldOrder = ['timeIn', 'timeOut', 'area'];
+    const fieldIndex = fieldOrder.indexOf(field);
+
+    if (Number.isNaN(rowIndex) || Number.isNaN(dayIndex) || fieldIndex === -1) return;
+
+    let nextDayIndex = dayIndex;
+    let nextField = fieldOrder[fieldIndex + 1];
+
+    if (!nextField) {
+      nextField = fieldOrder[0];
+      nextDayIndex = dayIndex + 1;
+    }
+
+    setTimeout(() => {
+      const nextInput = document.querySelector(
+        `input[data-attendance-cell="true"][data-row-index="${rowIndex}"][data-day-index="${nextDayIndex}"][data-field="${nextField}"]`
+      );
+
+      if (nextInput) {
         nextInput.focus();
         nextInput.select();
-      }, 20);
-    }
+      }
+    }, 30);
   };
 
   const handleEditableCellKeyDown = async (event, person, day) => {
-    if (event.key !== 'Enter') return;
+    if (event.key !== 'Enter' && event.key !== 'Tab') return;
 
-    event.preventDefault();
-    event.currentTarget.dataset.dirty = 'false';
-    await saveAttendanceGroupEdit(person, day);
-    focusNextEditableCell(event.currentTarget);
+    const input = event.currentTarget;
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      input.dataset.dirty = 'false';
+      await saveAttendanceGroupEdit(person, day);
+
+      const rowIndex = Number(input.dataset.rowIndex);
+      const dayIndex = Number(input.dataset.dayIndex);
+      const field = input.dataset.field;
+
+      if (!Number.isNaN(rowIndex) && !Number.isNaN(dayIndex) && field) {
+        focusEditableCell(rowIndex + 1, dayIndex, field);
+      }
+
+      return;
+    }
+
+    if (event.key === 'Tab' && !event.shiftKey) {
+      event.preventDefault();
+      input.dataset.dirty = 'false';
+      await saveAttendanceGroupEdit(person, day);
+      focusCellToRight(input);
+    }
   };
 
   const handleEditableCellBlur = async (event, person, day) => {
@@ -1078,7 +1127,7 @@ export default function Attendance() {
                     <tr key={person.name}>
                       <td style={tdName}>{person.name}</td>
 
-                      {DAYS.map((day) => {
+                      {DAYS.map((day, dayIndex) => {
                         const record = person.days?.[day];
 
                         return (
@@ -1087,6 +1136,9 @@ export default function Attendance() {
                               <input
                                 id={getEditableCellId(person.name, day, 'timeIn')}
                                 data-attendance-cell="true"
+                                data-row-index={index}
+                                data-day-index={dayIndex}
+                                data-field="timeIn"
                                 defaultValue={record?.timeIn || ''}
                                 onChange={(event) => {
                                   event.currentTarget.dataset.dirty = 'true';
@@ -1097,7 +1149,14 @@ export default function Attendance() {
                                 onKeyDown={(event) =>
                                   handleEditableCellKeyDown(event, person, day)
                                 }
-                                onFocus={(event) => event.currentTarget.select()}
+                                onMouseDown={(event) => {
+                                  event.currentTarget.dataset.clickCount = String(event.detail);
+                                }}
+                                onFocus={(event) => {
+                                  if (event.currentTarget.dataset.clickCount !== '2') {
+                                    event.currentTarget.select();
+                                  }
+                                }}
                                 style={editableCellInput}
                               />
                             </td>
@@ -1106,6 +1165,9 @@ export default function Attendance() {
                               <input
                                 id={getEditableCellId(person.name, day, 'timeOut')}
                                 data-attendance-cell="true"
+                                data-row-index={index}
+                                data-day-index={dayIndex}
+                                data-field="timeOut"
                                 defaultValue={record?.timeOut || ''}
                                 onChange={(event) => {
                                   event.currentTarget.dataset.dirty = 'true';
@@ -1116,7 +1178,14 @@ export default function Attendance() {
                                 onKeyDown={(event) =>
                                   handleEditableCellKeyDown(event, person, day)
                                 }
-                                onFocus={(event) => event.currentTarget.select()}
+                                onMouseDown={(event) => {
+                                  event.currentTarget.dataset.clickCount = String(event.detail);
+                                }}
+                                onFocus={(event) => {
+                                  if (event.currentTarget.dataset.clickCount !== '2') {
+                                    event.currentTarget.select();
+                                  }
+                                }}
                                 style={editableCellInput}
                               />
                             </td>
@@ -1125,6 +1194,9 @@ export default function Attendance() {
                               <input
                                 id={getEditableCellId(person.name, day, 'area')}
                                 data-attendance-cell="true"
+                                data-row-index={index}
+                                data-day-index={dayIndex}
+                                data-field="area"
                                 defaultValue={record?.area || ''}
                                 onChange={(event) => {
                                   event.currentTarget.dataset.dirty = 'true';
@@ -1135,7 +1207,14 @@ export default function Attendance() {
                                 onKeyDown={(event) =>
                                   handleEditableCellKeyDown(event, person, day)
                                 }
-                                onFocus={(event) => event.currentTarget.select()}
+                                onMouseDown={(event) => {
+                                  event.currentTarget.dataset.clickCount = String(event.detail);
+                                }}
+                                onFocus={(event) => {
+                                  if (event.currentTarget.dataset.clickCount !== '2') {
+                                    event.currentTarget.select();
+                                  }
+                                }}
                                 style={editableCellInput}
                               />
                             </td>
@@ -1209,6 +1288,7 @@ const editableCellInput = {
   fontSize: '0.78rem',
   fontFamily: 'system-ui, sans-serif',
   padding: 0,
+  cursor: 'text',
 };
 
 const sectionTd = {
