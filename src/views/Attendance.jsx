@@ -154,11 +154,74 @@ function getWeekInfo() {
   };
 }
 
+function getWeekInfoFromKey(key) {
+  const [year, month, day] = String(key || '').split('-').map(Number);
+  const monday = new Date(year, month - 1, day);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  return {
+    monday,
+    weekKey: key,
+    weekLabel: `${formatDate(monday)} to ${formatDate(sunday)}`,
+  };
+}
+
 export default function Attendance() {
   const navigate = useNavigate();
-  const { monday, weekKey, weekLabel } = getWeekInfo();
+  const currentWeek = getWeekInfo();
+  const [selectedWeekKey, setSelectedWeekKey] = useState(currentWeek.weekKey);
+  const selectedWeek = getWeekInfoFromKey(selectedWeekKey);
+  const { monday, weekKey, weekLabel } = selectedWeek;
+  const [availableWeeks, setAvailableWeeks] = useState([currentWeek.weekKey]);
   const [weeklyData, setWeeklyData] = useState({});
   const [loadingAttendance, setLoadingAttendance] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAvailableWeeks = async () => {
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .select('week_key')
+        .order('week_key', { ascending: false });
+
+      if (error) {
+        console.error('Load available weeks error:', error);
+        return;
+      }
+
+      if (!isMounted) return;
+
+      const uniqueWeeks = Array.from(
+        new Set([currentWeek.weekKey, ...(data || []).map((record) => record.week_key).filter(Boolean)])
+      );
+
+      setAvailableWeeks(uniqueWeeks);
+
+      if (!uniqueWeeks.includes(selectedWeekKey)) {
+        setSelectedWeekKey(uniqueWeeks[0] || currentWeek.weekKey);
+      }
+    };
+
+    loadAvailableWeeks();
+
+    const channel = supabase
+      .channel('attendance-weeks-list')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance_records' },
+        () => {
+          loadAvailableWeeks();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [currentWeek.weekKey, selectedWeekKey]);
 
   useEffect(() => {
     let isMounted = true;
@@ -694,6 +757,13 @@ export default function Attendance() {
     }
 
     setWeeklyData({});
+    setAvailableWeeks((prev) => {
+      const nextWeeks = prev.filter((key) => key !== weekKey);
+      return nextWeeks.length > 0 ? nextWeeks : [currentWeek.weekKey];
+    });
+    if (weekKey !== currentWeek.weekKey) {
+      setSelectedWeekKey(currentWeek.weekKey);
+    }
   };
   const resetWeek = async () => {
     const confirmReset = confirm(
@@ -714,6 +784,13 @@ export default function Attendance() {
     }
 
     setWeeklyData({});
+    setAvailableWeeks((prev) => {
+      const nextWeeks = prev.filter((key) => key !== weekKey);
+      return nextWeeks.length > 0 ? nextWeeks : [currentWeek.weekKey];
+    });
+    if (weekKey !== currentWeek.weekKey) {
+      setSelectedWeekKey(currentWeek.weekKey);
+    }
   };
 
   return (
@@ -767,8 +844,43 @@ export default function Attendance() {
             ← Back to Dashboard
           </button>
 
-          <div style={{ color: '#94a3b8', fontWeight: '800' }}>
-            Week: {weekLabel}{loadingAttendance ? ' • Loading...' : ''}
+          <div
+            style={{
+              color: '#94a3b8',
+              fontWeight: '800',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>Week:</span>
+
+            <select
+              value={selectedWeekKey}
+              onChange={(e) => setSelectedWeekKey(e.target.value)}
+              style={{
+                backgroundColor: '#1e293b',
+                color: '#f8fafc',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '8px 10px',
+                fontWeight: '800',
+                outline: 'none',
+              }}
+            >
+              {availableWeeks.map((availableWeekKey) => {
+                const availableWeek = getWeekInfoFromKey(availableWeekKey);
+
+                return (
+                  <option key={availableWeekKey} value={availableWeekKey}>
+                    {availableWeek.weekLabel}
+                  </option>
+                );
+              })}
+            </select>
+
+            <span>{loadingAttendance ? ' • Loading...' : ''}</span>
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
