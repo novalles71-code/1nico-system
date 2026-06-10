@@ -1193,6 +1193,7 @@ export default function Attendance() {
 } else {
   cell.value = roleCountsByDay[dayIndex][label] || '';
 }
+      });
 
       for (let col = 1; col <= visibleDayIndexes.length + 1; col += 1) {
         const cell = row.getCell(col);
