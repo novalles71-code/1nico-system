@@ -176,6 +176,22 @@ export default function Attendance() {
   const [availableWeeks, setAvailableWeeks] = useState([currentWeek.weekKey]);
   const [weeklyData, setWeeklyData] = useState({});
   const [loadingAttendance, setLoadingAttendance] = useState(true);
+  const [activeCell, setActiveCell] = useState(null);
+  const [selectionStart, setSelectionStart] = useState(null);
+  const [selectionEnd, setSelectionEnd] = useState(null);
+  const [isSelectingCells, setIsSelectingCells] = useState(false);
+
+  useEffect(() => {
+    const stopSelection = () => {
+      setIsSelectingCells(false);
+    };
+
+    window.addEventListener('mouseup', stopSelection);
+
+    return () => {
+      window.removeEventListener('mouseup', stopSelection);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -653,6 +669,244 @@ export default function Attendance() {
   };
 
 
+
+  const editableFieldOrder = ['timeIn', 'timeOut', 'area'];
+
+  const getColumnIndex = (dayIndex, field) => {
+    const fieldIndex = editableFieldOrder.indexOf(field);
+    if (fieldIndex === -1) return -1;
+    return dayIndex * 3 + fieldIndex;
+  };
+
+  const getDayFieldFromColumnIndex = (columnIndex) => {
+    const safeColumn = Math.max(0, Number(columnIndex) || 0);
+    const dayIndex = Math.floor(safeColumn / 3);
+    const field = editableFieldOrder[safeColumn % 3];
+
+    return {
+      dayIndex,
+      field,
+    };
+  };
+
+  const getInputByPosition = (rowIndex, columnIndex) => {
+    const { dayIndex, field } = getDayFieldFromColumnIndex(columnIndex);
+
+    return document.querySelector(
+      `input[data-attendance-cell="true"][data-row-index="${rowIndex}"][data-day-index="${dayIndex}"][data-field="${field}"]`
+    );
+  };
+
+  const getSelectionRange = () => {
+    const start = selectionStart || activeCell;
+    const end = selectionEnd || selectionStart || activeCell;
+
+    if (!start || !end) return null;
+
+    return {
+      rowStart: Math.min(start.rowIndex, end.rowIndex),
+      rowEnd: Math.max(start.rowIndex, end.rowIndex),
+      colStart: Math.min(start.columnIndex, end.columnIndex),
+      colEnd: Math.max(start.columnIndex, end.columnIndex),
+    };
+  };
+
+  const isCellSelected = (rowIndex, dayIndex, field) => {
+    const columnIndex = getColumnIndex(dayIndex, field);
+    const range = getSelectionRange();
+
+    if (!range) return false;
+
+    return (
+      rowIndex >= range.rowStart &&
+      rowIndex <= range.rowEnd &&
+      columnIndex >= range.colStart &&
+      columnIndex <= range.colEnd
+    );
+  };
+
+  const handleCellMouseDown = (event) => {
+    const input = event.currentTarget;
+    const rowIndex = Number(input.dataset.rowIndex);
+    const dayIndex = Number(input.dataset.dayIndex);
+    const field = input.dataset.field;
+    const columnIndex = getColumnIndex(dayIndex, field);
+
+    if (Number.isNaN(rowIndex) || columnIndex === -1) return;
+
+    const nextCell = {
+      rowIndex,
+      dayIndex,
+      field,
+      columnIndex,
+    };
+
+    setActiveCell(nextCell);
+    setSelectionStart(nextCell);
+    setSelectionEnd(nextCell);
+    setIsSelectingCells(true);
+
+    input.dataset.clickCount = String(event.detail);
+  };
+
+  const handleCellMouseEnter = (event) => {
+    if (!isSelectingCells || !selectionStart) return;
+
+    const input = event.currentTarget;
+    const rowIndex = Number(input.dataset.rowIndex);
+    const dayIndex = Number(input.dataset.dayIndex);
+    const field = input.dataset.field;
+    const columnIndex = getColumnIndex(dayIndex, field);
+
+    if (Number.isNaN(rowIndex) || columnIndex === -1) return;
+
+    setSelectionEnd({
+      rowIndex,
+      dayIndex,
+      field,
+      columnIndex,
+    });
+  };
+
+  const handleCellFocus = (event) => {
+    const input = event.currentTarget;
+    const rowIndex = Number(input.dataset.rowIndex);
+    const dayIndex = Number(input.dataset.dayIndex);
+    const field = input.dataset.field;
+    const columnIndex = getColumnIndex(dayIndex, field);
+
+    if (!Number.isNaN(rowIndex) && columnIndex !== -1) {
+      const nextCell = {
+        rowIndex,
+        dayIndex,
+        field,
+        columnIndex,
+      };
+
+      setActiveCell(nextCell);
+
+      if (!isSelectingCells) {
+        setSelectionStart(nextCell);
+        setSelectionEnd(nextCell);
+      }
+    }
+
+    if (input.dataset.clickCount !== '2') {
+      input.select();
+    }
+  };
+
+  const getClipboardTextFromSelection = () => {
+    const range = getSelectionRange();
+
+    if (!range) return '';
+
+    const lines = [];
+
+    for (let rowIndex = range.rowStart; rowIndex <= range.rowEnd; rowIndex += 1) {
+      const values = [];
+
+      for (let columnIndex = range.colStart; columnIndex <= range.colEnd; columnIndex += 1) {
+        const input = getInputByPosition(rowIndex, columnIndex);
+        values.push(input ? input.value : '');
+      }
+
+      lines.push(values.join('\t'));
+    }
+
+    return lines.join('\n');
+  };
+
+  const handleAttendanceCopy = (event) => {
+    const textToCopy = getClipboardTextFromSelection();
+
+    if (!textToCopy) return;
+
+    event.preventDefault();
+    event.clipboardData.setData('text/plain', textToCopy);
+  };
+
+  const pasteValuesFromCell = async (startInput, pastedText) => {
+    const startRowIndex = Number(startInput.dataset.rowIndex);
+    const startDayIndex = Number(startInput.dataset.dayIndex);
+    const startField = startInput.dataset.field;
+    const startColumnIndex = getColumnIndex(startDayIndex, startField);
+
+    if (Number.isNaN(startRowIndex) || startColumnIndex === -1) return;
+
+    const pastedRows = String(pastedText || '')
+      .replace(/\r/g, '')
+      .split('\n')
+      .filter((line, index, array) => !(index === array.length - 1 && line === ''));
+
+    const touchedGroups = new Map();
+
+    pastedRows.forEach((line, rowOffset) => {
+      const values = line.split('\t');
+
+      values.forEach((value, colOffset) => {
+        const targetRowIndex = startRowIndex + rowOffset;
+        const targetColumnIndex = startColumnIndex + colOffset;
+        const targetInput = getInputByPosition(targetRowIndex, targetColumnIndex);
+
+        if (!targetInput) return;
+
+        const targetDayIndex = Number(targetInput.dataset.dayIndex);
+        const targetField = targetInput.dataset.field;
+        const targetDay = DAYS[targetDayIndex];
+        const normalizedValue = normalizeCellValue(targetField, value);
+
+        targetInput.value = normalizedValue;
+        targetInput.dataset.dirty = 'false';
+
+        if (targetDay) {
+          touchedGroups.set(`${targetRowIndex}-${targetDay}`, {
+            rowIndex: targetRowIndex,
+            day: targetDay,
+          });
+        }
+      });
+    });
+
+    for (const group of touchedGroups.values()) {
+      const person = employeeRows[group.rowIndex];
+      if (person?.type === 'employee') {
+        await saveAttendanceGroupEdit(person, group.day);
+      }
+    }
+
+    setSelectionStart({
+      rowIndex: startRowIndex,
+      dayIndex: startDayIndex,
+      field: startField,
+      columnIndex: startColumnIndex,
+    });
+
+    const lastRowIndex = startRowIndex + Math.max(pastedRows.length - 1, 0);
+    const lastColumnOffset = pastedRows.reduce((max, line) => {
+      return Math.max(max, line.split('\t').length - 1);
+    }, 0);
+    const lastColumnIndex = startColumnIndex + lastColumnOffset;
+    const lastCell = getDayFieldFromColumnIndex(lastColumnIndex);
+
+    setSelectionEnd({
+      rowIndex: lastRowIndex,
+      dayIndex: lastCell.dayIndex,
+      field: lastCell.field,
+      columnIndex: lastColumnIndex,
+    });
+  };
+
+  const handleAttendancePaste = async (event) => {
+    const pastedText = event.clipboardData.getData('text/plain');
+
+    if (!pastedText) return;
+
+    event.preventDefault();
+    event.currentTarget.dataset.dirty = 'false';
+    await pasteValuesFromCell(event.currentTarget, pastedText);
+  };
+
   const parseTimeToMinutes = (value) => {
     const normalized = normalizeTimeValue(value);
     if (!normalized || !normalized.includes(':')) return null;
@@ -804,7 +1058,7 @@ export default function Attendance() {
     const sheet = workbook.addWorksheet('Role Summary', {
       pageSetup: {
         paperSize: 9,
-        orientation: 'portrait',
+        orientation: 'landscape',
         fitToPage: true,
         fitToWidth: 1,
         fitToHeight: 0,
@@ -819,10 +1073,27 @@ export default function Attendance() {
       },
     });
 
-    sheet.getColumn(1).width = 16;
-    sheet.getColumn(2).width = 12;
+    const workedDayIndexes = DAYS
+      .map((day, index) => ({ day, index }))
+      .filter(({ day }) =>
+        rows.some((person) => {
+          const record = person.days?.[day];
+          return Boolean(record?.timeIn || record?.timeOut || record?.area);
+        })
+      )
+      .map(({ index }) => index);
 
-    sheet.mergeCells('A1:B1');
+    const visibleDayIndexes = workedDayIndexes.length > 0
+      ? workedDayIndexes
+      : DAYS.map((_, index) => index);
+
+    sheet.getColumn(1).width = 16;
+
+    visibleDayIndexes.forEach((_, index) => {
+      sheet.getColumn(index + 2).width = 14;
+    });
+
+    sheet.mergeCells(1, 1, 1, visibleDayIndexes.length + 1);
     const titleCell = sheet.getCell('A1');
     titleCell.value = 'ROLE SUMMARY';
     titleCell.font = { name: 'Calibri', size: 14, bold: true };
@@ -835,9 +1106,20 @@ export default function Attendance() {
     titleCell.border = borderStyle;
 
     const headerRow = sheet.getRow(3);
-    ['ROLL', 'QTY'].forEach((header, index) => {
-      const cell = headerRow.getCell(index + 1);
-      cell.value = header;
+    const roleHeader = headerRow.getCell(1);
+    roleHeader.value = 'ROLE';
+    roleHeader.font = { name: 'Calibri', size: 11, bold: true };
+    roleHeader.alignment = center;
+    roleHeader.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFDDEBF7' },
+    };
+    roleHeader.border = borderStyle;
+
+    visibleDayIndexes.forEach((dayIndex, index) => {
+      const cell = headerRow.getCell(index + 2);
+      cell.value = getDayDate(dayIndex);
       cell.font = { name: 'Calibri', size: 11, bold: true };
       cell.alignment = center;
       cell.fill = {
@@ -848,46 +1130,75 @@ export default function Attendance() {
       cell.border = borderStyle;
     });
 
-    const roleCounts = {
-      AST: 0,
-      QCS: 0,
-      OPS: 0,
-      LW: 0,
+    const normalizeRoleForSummary = (roleValue) => {
+      const role = String(roleValue || '').trim().toUpperCase();
+
+      if (role === 'QC' || role === 'QCS') return 'QCS';
+      if (role === 'OP' || role === 'OPS') return 'OPS';
+      if (role === 'AST') return 'AST';
+
+      if (
+        role === 'S1' ||
+        role === 'S2' ||
+        role === 'S3' ||
+        role === 'S4' ||
+        role === 'LW'
+      ) {
+        return 'LW';
+      }
+
+      return '';
     };
 
+    const roleCountsByDay = {};
+
+    visibleDayIndexes.forEach((dayIndex) => {
+      roleCountsByDay[dayIndex] = {
+        AST: 0,
+        QCS: 0,
+        OPS: 0,
+        LW: 0,
+      };
+    });
+
     rows.forEach((person) => {
-      const foundRoles = new Set();
+      visibleDayIndexes.forEach((dayIndex) => {
+        const day = DAYS[dayIndex];
+        const record = person.days?.[day];
+        const mappedRole = normalizeRoleForSummary(record?.area);
 
-      DAYS.forEach((day) => {
-        const role = String(person.days?.[day]?.area || '').trim().toUpperCase();
-        if (roleCounts[role] !== undefined) {
-          foundRoles.add(role);
+        if (mappedRole && roleCountsByDay[dayIndex][mappedRole] !== undefined) {
+          roleCountsByDay[dayIndex][mappedRole] += 1;
         }
-      });
-
-      foundRoles.forEach((role) => {
-        roleCounts[role] += 1;
       });
     });
 
-    const roleRows = [
-      ['AST', roleCounts.AST || ''],
-      ['QCS', roleCounts.QCS || ''],
-      ['OPS', roleCounts.OPS || ''],
-      ['LW', roleCounts.LW || ''],
-      ['FRKL', ''],
-      ['', ''],
-      ['TOTAL', roleCounts.AST + roleCounts.QCS + roleCounts.OPS + roleCounts.LW],
-    ];
-
+    const roleLabels = ['AST', 'QCS', 'OPS', 'LW', 'FRKL', '', 'TOTAL'];
     let currentRow = 4;
 
-    roleRows.forEach(([label, qty]) => {
+    roleLabels.forEach((label) => {
       const row = sheet.getRow(currentRow);
       row.getCell(1).value = label;
-      row.getCell(2).value = qty;
 
-      for (let col = 1; col <= 2; col += 1) {
+      visibleDayIndexes.forEach((dayIndex, index) => {
+        const cell = row.getCell(index + 2);
+
+        if (label === 'FRKL' || label === '') {
+          cell.value = '';
+        } else if (label === 'TOTAL') {
+          const total =
+            roleCountsByDay[dayIndex].AST +
+            roleCountsByDay[dayIndex].QCS +
+            roleCountsByDay[dayIndex].OPS +
+            roleCountsByDay[dayIndex].LW;
+
+          cell.value = total || '';
+        } else {
+          cell.value = roleCountsByDay[dayIndex][label] || '';
+        }
+      });
+
+      for (let col = 1; col <= visibleDayIndexes.length + 1; col += 1) {
         const cell = row.getCell(col);
         cell.font = { name: 'Calibri', size: 11, bold: true };
         cell.alignment = col === 1 ? { vertical: 'middle', horizontal: 'left' } : center;
@@ -895,7 +1206,7 @@ export default function Attendance() {
       }
 
       if (label === 'TOTAL') {
-        for (let col = 1; col <= 2; col += 1) {
+        for (let col = 1; col <= visibleDayIndexes.length + 1; col += 1) {
           row.getCell(col).fill = {
             type: 'pattern',
             pattern: 'solid',
@@ -1412,15 +1723,15 @@ export default function Attendance() {
                                 onKeyDown={(event) =>
                                   handleEditableCellKeyDown(event, person, day)
                                 }
-                                onMouseDown={(event) => {
-                                  event.currentTarget.dataset.clickCount = String(event.detail);
+                                onMouseDown={handleCellMouseDown}
+                                onMouseEnter={handleCellMouseEnter}
+                                onFocus={handleCellFocus}
+                                onCopy={handleAttendanceCopy}
+                                onPaste={handleAttendancePaste}
+                                style={{
+                                  ...editableCellInput,
+                                  ...(isCellSelected(index, dayIndex, 'timeIn') ? selectedEditableCellInput : {}),
                                 }}
-                                onFocus={(event) => {
-                                  if (event.currentTarget.dataset.clickCount !== '2') {
-                                    event.currentTarget.select();
-                                  }
-                                }}
-                                style={editableCellInput}
                               />
                             </td>
 
@@ -1441,15 +1752,15 @@ export default function Attendance() {
                                 onKeyDown={(event) =>
                                   handleEditableCellKeyDown(event, person, day)
                                 }
-                                onMouseDown={(event) => {
-                                  event.currentTarget.dataset.clickCount = String(event.detail);
+                                onMouseDown={handleCellMouseDown}
+                                onMouseEnter={handleCellMouseEnter}
+                                onFocus={handleCellFocus}
+                                onCopy={handleAttendanceCopy}
+                                onPaste={handleAttendancePaste}
+                                style={{
+                                  ...editableCellInput,
+                                  ...(isCellSelected(index, dayIndex, 'timeOut') ? selectedEditableCellInput : {}),
                                 }}
-                                onFocus={(event) => {
-                                  if (event.currentTarget.dataset.clickCount !== '2') {
-                                    event.currentTarget.select();
-                                  }
-                                }}
-                                style={editableCellInput}
                               />
                             </td>
 
@@ -1470,15 +1781,15 @@ export default function Attendance() {
                                 onKeyDown={(event) =>
                                   handleEditableCellKeyDown(event, person, day)
                                 }
-                                onMouseDown={(event) => {
-                                  event.currentTarget.dataset.clickCount = String(event.detail);
+                                onMouseDown={handleCellMouseDown}
+                                onMouseEnter={handleCellMouseEnter}
+                                onFocus={handleCellFocus}
+                                onCopy={handleAttendanceCopy}
+                                onPaste={handleAttendancePaste}
+                                style={{
+                                  ...editableCellInput,
+                                  ...(isCellSelected(index, dayIndex, 'area') ? selectedEditableCellInput : {}),
                                 }}
-                                onFocus={(event) => {
-                                  if (event.currentTarget.dataset.clickCount !== '2') {
-                                    event.currentTarget.select();
-                                  }
-                                }}
-                                style={editableCellInput}
                               />
                             </td>
                           </React.Fragment>
@@ -1552,6 +1863,11 @@ const editableCellInput = {
   fontFamily: 'system-ui, sans-serif',
   padding: 0,
   cursor: 'text',
+};
+
+const selectedEditableCellInput = {
+  backgroundColor: '#bfdbfe',
+  boxShadow: 'inset 0 0 0 2px #2563eb',
 };
 
 const sectionTd = {
