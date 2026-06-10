@@ -652,6 +652,266 @@ export default function Attendance() {
     await saveAttendanceGroupEdit(person, day);
   };
 
+
+  const parseTimeToMinutes = (value) => {
+    const normalized = normalizeTimeValue(value);
+    if (!normalized || !normalized.includes(':')) return null;
+
+    const [hourPart, minutePart = '00'] = normalized.split(':');
+    const hour = parseInt(hourPart, 10);
+    const minute = parseInt(minutePart, 10);
+
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+
+    return hour * 60 + minute;
+  };
+
+  const calculateRecordHours = (record) => {
+    const startMinutes = parseTimeToMinutes(record?.timeIn);
+    const endMinutes = parseTimeToMinutes(record?.timeOut);
+
+    if (startMinutes === null || endMinutes === null) return 0;
+
+    let totalMinutes = endMinutes - startMinutes;
+
+    if (totalMinutes < 0) {
+      totalMinutes += 24 * 60;
+    }
+
+    return totalMinutes / 60;
+  };
+
+  const roundHours = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+  const getPersonTotalHours = (person) => {
+    const total = DAYS.reduce((sum, day) => {
+      const record = person.days?.[day];
+      return sum + calculateRecordHours(record);
+    }, 0);
+
+    return roundHours(total);
+  };
+
+  const addTotalHoursSheet = (workbook, rows, borderStyle, center) => {
+    const sheet = workbook.addWorksheet('Total Hours', {
+      pageSetup: {
+        paperSize: 9,
+        orientation: 'portrait',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: {
+          left: 0.25,
+          right: 0.25,
+          top: 0.35,
+          bottom: 0.35,
+          header: 0.1,
+          footer: 0.1,
+        },
+      },
+    });
+
+    sheet.columns = [
+      { key: 'name', width: 38 },
+      { key: 'hours', width: 14 },
+      { key: 'regular', width: 14 },
+      { key: 'extra', width: 14 },
+    ];
+
+    sheet.mergeCells('A1:D1');
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = 'TOTAL HOURS';
+    titleCell.font = { name: 'Calibri', size: 14, bold: true };
+    titleCell.alignment = center;
+    titleCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF92D050' },
+    };
+    titleCell.border = borderStyle;
+
+    const headerRow = sheet.getRow(3);
+    ['NAMES', 'HOURS', 'REGULAR', 'EXTRA'].forEach((header, index) => {
+      const cell = headerRow.getCell(index + 1);
+      cell.value = header;
+      cell.font = { name: 'Calibri', size: 11, bold: true };
+      cell.alignment = index === 0 ? { vertical: 'middle', horizontal: 'left' } : center;
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFDDEBF7' },
+      };
+      cell.border = borderStyle;
+    });
+
+    let currentRow = 4;
+    let totalHours = 0;
+    let totalRegular = 0;
+    let totalExtra = 0;
+
+    rows.forEach((person) => {
+      const hours = getPersonTotalHours(person);
+      if (hours <= 0) return;
+
+      const regular = Math.min(hours, 40);
+      const extra = hours > 40 ? roundHours(hours - 40) : '';
+
+      totalHours += hours;
+      totalRegular += regular;
+      totalExtra += typeof extra === 'number' ? extra : 0;
+
+      const row = sheet.getRow(currentRow);
+      row.getCell(1).value = person.name;
+      row.getCell(2).value = hours;
+      row.getCell(3).value = roundHours(regular);
+      row.getCell(4).value = extra;
+
+      for (let col = 1; col <= 4; col += 1) {
+        const cell = row.getCell(col);
+        cell.font = { name: 'Calibri', size: 11, bold: true };
+        cell.alignment = col === 1 ? { vertical: 'middle', horizontal: 'left' } : center;
+        cell.border = borderStyle;
+      }
+
+      currentRow += 1;
+    });
+
+    currentRow += 1;
+    const totalRow = sheet.getRow(currentRow);
+    totalRow.getCell(1).value = 'TOTALS';
+    totalRow.getCell(2).value = roundHours(totalHours);
+    totalRow.getCell(3).value = roundHours(totalRegular);
+    totalRow.getCell(4).value = totalExtra > 0 ? roundHours(totalExtra) : '';
+
+    for (let col = 1; col <= 4; col += 1) {
+      const cell = totalRow.getCell(col);
+      cell.font = { name: 'Calibri', size: 11, bold: true };
+      cell.alignment = col === 1 ? { vertical: 'middle', horizontal: 'left' } : center;
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF92D050' },
+      };
+      cell.border = borderStyle;
+    }
+
+    sheet.eachRow((row) => {
+      row.height = 20;
+    });
+  };
+
+  const addRoleSummarySheet = (workbook, rows, borderStyle, center) => {
+    const sheet = workbook.addWorksheet('Role Summary', {
+      pageSetup: {
+        paperSize: 9,
+        orientation: 'portrait',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: {
+          left: 0.25,
+          right: 0.25,
+          top: 0.35,
+          bottom: 0.35,
+          header: 0.1,
+          footer: 0.1,
+        },
+      },
+    });
+
+    sheet.getColumn(1).width = 16;
+    sheet.getColumn(2).width = 12;
+
+    sheet.mergeCells('A1:B1');
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = 'ROLE SUMMARY';
+    titleCell.font = { name: 'Calibri', size: 14, bold: true };
+    titleCell.alignment = center;
+    titleCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF92D050' },
+    };
+    titleCell.border = borderStyle;
+
+    const headerRow = sheet.getRow(3);
+    ['ROLL', 'QTY'].forEach((header, index) => {
+      const cell = headerRow.getCell(index + 1);
+      cell.value = header;
+      cell.font = { name: 'Calibri', size: 11, bold: true };
+      cell.alignment = center;
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFDDEBF7' },
+      };
+      cell.border = borderStyle;
+    });
+
+    const roleCounts = {
+      AST: 0,
+      QCS: 0,
+      OPS: 0,
+      LW: 0,
+    };
+
+    rows.forEach((person) => {
+      const foundRoles = new Set();
+
+      DAYS.forEach((day) => {
+        const role = String(person.days?.[day]?.area || '').trim().toUpperCase();
+        if (roleCounts[role] !== undefined) {
+          foundRoles.add(role);
+        }
+      });
+
+      foundRoles.forEach((role) => {
+        roleCounts[role] += 1;
+      });
+    });
+
+    const roleRows = [
+      ['AST', roleCounts.AST || ''],
+      ['QCS', roleCounts.QCS || ''],
+      ['OPS', roleCounts.OPS || ''],
+      ['LW', roleCounts.LW || ''],
+      ['FRKL', ''],
+      ['', ''],
+      ['TOTAL', roleCounts.AST + roleCounts.QCS + roleCounts.OPS + roleCounts.LW],
+    ];
+
+    let currentRow = 4;
+
+    roleRows.forEach(([label, qty]) => {
+      const row = sheet.getRow(currentRow);
+      row.getCell(1).value = label;
+      row.getCell(2).value = qty;
+
+      for (let col = 1; col <= 2; col += 1) {
+        const cell = row.getCell(col);
+        cell.font = { name: 'Calibri', size: 11, bold: true };
+        cell.alignment = col === 1 ? { vertical: 'middle', horizontal: 'left' } : center;
+        cell.border = borderStyle;
+      }
+
+      if (label === 'TOTAL') {
+        for (let col = 1; col <= 2; col += 1) {
+          row.getCell(col).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF92D050' },
+          };
+        }
+      }
+
+      currentRow += 1;
+    });
+
+    sheet.eachRow((row) => {
+      row.height = 20;
+    });
+  };
+
   const downloadExcel = async () => {
     const workedRows = employeeRows.filter(hasWorked);
 
@@ -865,6 +1125,9 @@ export default function Attendance() {
         };
       });
     });
+
+    addTotalHoursSheet(workbook, orderedWorkedRows, borderStyle, center);
+    addRoleSummarySheet(workbook, orderedWorkedRows, borderStyle, center);
 
     const buffer = await workbook.xlsx.writeBuffer();
 
