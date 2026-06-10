@@ -1184,19 +1184,15 @@ export default function Attendance() {
         const cell = row.getCell(index + 2);
 
         if (label === 'FRKL' || label === '') {
-          cell.value = '';
-        } else if (label === 'TOTAL') {
-          const total =
-            roleCountsByDay[dayIndex].AST +
-            roleCountsByDay[dayIndex].QCS +
-            roleCountsByDay[dayIndex].OPS +
-            roleCountsByDay[dayIndex].LW;
-
-          cell.value = total || '';
-        } else {
-          cell.value = roleCountsByDay[dayIndex][label] || '';
-        }
-      });
+  cell.value = '';
+} else if (label === 'TOTAL') {
+  const columnLetter = sheet.getColumn(index + 2).letter;
+  cell.value = {
+    formula: `SUM(${columnLetter}4:${columnLetter}8)`,
+  };
+} else {
+  cell.value = roleCountsByDay[dayIndex][label] || '';
+}
 
       for (let col = 1; col <= visibleDayIndexes.length + 1; col += 1) {
         const cell = row.getCell(col);
