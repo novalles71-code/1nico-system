@@ -172,8 +172,8 @@ function formatWeekSheetName(monday) {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
 
-  const start = `${monday.getMonth() + 1}-${monday.getDate()}`;
-  const end = `${sunday.getMonth() + 1}-${sunday.getDate()}`;
+  const start = `${monday.getMonth() + 1}/${monday.getDate()}`;
+  const end = `${sunday.getMonth() + 1}/${sunday.getDate()}`;
 
   return `${start} - ${end}`;
 }
@@ -1478,26 +1478,23 @@ export default function Attendance() {
 
       if (previousDownloadGroup && previousDownloadGroup !== currentDownloadGroup) {
         const spacerStartRow = currentRow;
-        const spacerEndRow = currentRow + 1;
 
         spacerRows.add(spacerStartRow);
-        spacerRows.add(spacerEndRow);
 
-        worksheet.mergeCells(spacerStartRow, 1, spacerEndRow, 22);
+        worksheet.mergeCells(spacerStartRow, 1, spacerStartRow, 22);
 
         const spacerCell = worksheet.getCell(spacerStartRow, 1);
         spacerCell.value = '';
-        spacerCell.border = thinBorderStyle;
+        spacerCell.border = {};
         spacerCell.fill = {
           type: 'pattern',
           pattern: 'solid',
           fgColor: { argb: 'FFFFFFFF' },
         };
 
-        worksheet.getRow(spacerStartRow).height = 20;
-        worksheet.getRow(spacerEndRow).height = 20;
+        worksheet.getRow(spacerStartRow).height = 8;
 
-        currentRow += 2;
+        currentRow += 1;
       }
 
       previousDownloadGroup = currentDownloadGroup;
