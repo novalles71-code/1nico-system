@@ -1535,24 +1535,27 @@ export default function Attendance() {
       const currentDownloadGroup = getDownloadGroupKey(person);
 
       if (previousDownloadGroup && previousDownloadGroup !== currentDownloadGroup) {
-        for (let spacerIndex = 0; spacerIndex < 2; spacerIndex += 1) {
-          spacerRows.add(currentRow);
-          worksheet.mergeCells(currentRow, 1, currentRow, 22);
+        const spacerStartRow = currentRow;
+        const spacerEndRow = currentRow + 1;
 
-          const spacerRow = worksheet.getRow(currentRow);
-          const spacerCell = spacerRow.getCell(1);
+        spacerRows.add(spacerStartRow);
+        spacerRows.add(spacerEndRow);
 
-          spacerCell.value = '';
-          spacerCell.border = thinBorderStyle;
-          spacerCell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFFFFFFF' },
-          };
+        worksheet.mergeCells(spacerStartRow, 1, spacerEndRow, 22);
 
-          spacerRow.height = 12;
-          currentRow += 1;
-        }
+        const spacerCell = worksheet.getCell(spacerStartRow, 1);
+        spacerCell.value = '';
+        spacerCell.border = thinBorderStyle;
+        spacerCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFFFF' },
+        };
+
+        worksheet.getRow(spacerStartRow).height = 20;
+        worksheet.getRow(spacerEndRow).height = 20;
+
+        currentRow += 2;
       }
 
       previousDownloadGroup = currentDownloadGroup;
