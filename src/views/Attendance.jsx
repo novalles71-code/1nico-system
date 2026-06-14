@@ -1426,6 +1426,12 @@ export default function Attendance() {
     worksheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' };
     worksheet.getCell('A1').border = borderStyle;
 
+    worksheet.getCell('A1').fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFDDEBF7' }
+  };
+
     worksheet.getCell('A2').value = '';
     worksheet.getCell('A2').border = borderStyle;
 
