@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase';
 
 const SYSTEM_NAME = 'system1';
 const SYSTEM_LABEL = 'System 1';
+const SYSTEM_CODE = 'S1';
 
 export default function System1() {
   const [activeTab, setActiveTab] = useState('Home');
@@ -363,6 +364,7 @@ useEffect(() => {
   const [tempTimeIn, setTempTimeIn] = useState('');
   const [tempTimeOut, setTempTimeOut] = useState('');
   const [tempRole, setTempRole] = useState('S1');
+  const [highlightedEmployeeIndex, setHighlightedEmployeeIndex] = useState(0);
 
   const [employeesList, setEmployeesList] = useState([]);
 
@@ -429,11 +431,67 @@ useEffect(() => {
     : [];
 
   useEffect(() => {
+    setHighlightedEmployeeIndex(0);
+  }, [employeeSearch]);
+
+  useEffect(() => {
     localStorage.setItem(
       'system1_attendance_rows',
       JSON.stringify(attendanceRows)
     );
   }, [attendanceRows]);
+
+  const normalizeAttendanceTimeValue = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+
+    if (raw.includes(':')) {
+      const [hourPart, minutePart = '00'] = raw.split(':');
+      const hour = parseInt(hourPart.replace(/\D/g, ''), 10);
+      const minute = parseInt(minutePart.replace(/\D/g, ''), 10);
+
+      if (Number.isNaN(hour)) return raw;
+
+      const safeHour = Math.max(0, Math.min(hour, 23));
+      const safeMinute = Number.isNaN(minute)
+        ? 0
+        : Math.max(0, Math.min(minute, 59));
+
+      return `${safeHour}:${String(safeMinute).padStart(2, '0')}`;
+    }
+
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return '';
+
+    if (digits.length <= 2) {
+      const hour = parseInt(digits, 10);
+      if (Number.isNaN(hour)) return raw;
+      return `${Math.max(0, Math.min(hour, 23))}:00`;
+    }
+
+    const hourDigits = digits.slice(0, -2);
+    const minuteDigits = digits.slice(-2);
+    const hour = parseInt(hourDigits, 10);
+    const minute = parseInt(minuteDigits, 10);
+
+    if (Number.isNaN(hour)) return raw;
+
+    const safeHour = Math.max(0, Math.min(hour, 23));
+    const safeMinute = Number.isNaN(minute)
+      ? 0
+      : Math.max(0, Math.min(minute, 59));
+
+    return `${safeHour}:${String(safeMinute).padStart(2, '0')}`;
+  };
+
+  const selectFilteredEmployee = (employee) => {
+    if (!employee?.name) return;
+
+    setSelectedEmployee(employee.name);
+    setEmployeeSearch(employee.name);
+    setHighlightedEmployeeIndex(0);
+    focusAttendanceField('attendance-time-in');
+  };
 
   const focusAttendanceField = (id) => {
     setTimeout(() => {
@@ -444,14 +502,17 @@ useEffect(() => {
   const addAttendanceRow = () => {
     if (!selectedEmployee) return;
 
+    const finalTimeIn = normalizeAttendanceTimeValue(tempTimeIn);
+    const finalTimeOut = normalizeAttendanceTimeValue(tempTimeOut);
+
     setAttendanceRows((prev) => [
       ...prev,
       {
         id: Date.now(),
         name: selectedEmployee,
-        timeIn: tempTimeIn,
-        timeOut: tempTimeOut,
-        role: tempRole || 'S1',
+        timeIn: finalTimeIn,
+        timeOut: finalTimeOut,
+        role: tempRole || SYSTEM_CODE,
       },
     ]);
 
@@ -459,12 +520,45 @@ useEffect(() => {
     setSelectedEmployee('');
     setTempTimeIn('');
     setTempTimeOut('');
-    setTempRole('S1');
+    setTempRole(SYSTEM_CODE);
+    setHighlightedEmployeeIndex(0);
 
     focusAttendanceField('attendance-search-input');
   };
 
   const handleAttendanceSearchKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+
+      if (filteredEmployees.length === 0) return;
+
+      setHighlightedEmployeeIndex((prev) =>
+        prev + 1 >= filteredEmployees.length ? 0 : prev + 1
+      );
+
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+
+      if (filteredEmployees.length === 0) return;
+
+      setHighlightedEmployeeIndex((prev) =>
+        prev - 1 < 0 ? filteredEmployees.length - 1 : prev - 1
+      );
+
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setEmployeeSearch('');
+      setSelectedEmployee('');
+      setHighlightedEmployeeIndex(0);
+      return;
+    }
+
     if (e.key !== 'Enter') return;
 
     e.preventDefault();
@@ -475,10 +569,10 @@ useEffect(() => {
     }
 
     if (filteredEmployees.length > 0) {
-      const firstMatch = filteredEmployees[0];
-      setSelectedEmployee(firstMatch.name);
-      setEmployeeSearch(firstMatch.name);
-      focusAttendanceField('attendance-time-in');
+      const match =
+        filteredEmployees[highlightedEmployeeIndex] || filteredEmployees[0];
+
+      selectFilteredEmployee(match);
     }
   };
 
@@ -486,6 +580,19 @@ useEffect(() => {
     if (e.key !== 'Enter') return;
 
     e.preventDefault();
+
+    if (nextId === 'attendance-time-out') {
+      setTempTimeIn((prev) => normalizeAttendanceTimeValue(prev));
+    }
+
+    if (nextId === 'attendance-role') {
+      setTempTimeOut((prev) => normalizeAttendanceTimeValue(prev));
+    }
+
+    if (nextId === 'attendance-add-button') {
+      setTempTimeIn((prev) => normalizeAttendanceTimeValue(prev));
+      setTempTimeOut((prev) => normalizeAttendanceTimeValue(prev));
+    }
 
     if (nextId === 'add') {
       addAttendanceRow();
@@ -499,6 +606,16 @@ useEffect(() => {
     setAttendanceRows((prev) =>
       prev.map((row) =>
         row.id === id ? { ...row, [field]: value } : row
+      )
+    );
+  };
+
+  const normalizeAttendanceRowTime = (id, field) => {
+    setAttendanceRows((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? { ...row, [field]: normalizeAttendanceTimeValue(row[field]) }
+          : row
       )
     );
   };
@@ -1270,6 +1387,7 @@ const tabs = [
             placeholder="Search employee..."
             onChange={(e) => {
               setEmployeeSearch(e.target.value);
+                        setHighlightedEmployeeIndex(0);
               setSelectedEmployee('');
             }}
             onKeyDown={handleAttendanceSearchKeyDown}
@@ -1301,18 +1419,16 @@ const tabs = [
                 boxShadow: '0 6px 14px rgba(15, 23, 42, 0.12)',
               }}
             >
-              {filteredEmployees.map((emp) => (
+              {filteredEmployees.map((emp, index) => (
                 <div
                   key={emp.id}
-                  onClick={() => {
-                    setSelectedEmployee(emp.name);
-                    setEmployeeSearch(emp.name);
-                    focusAttendanceField('attendance-time-in');
-                  }}
+                  onMouseEnter={() => setHighlightedEmployeeIndex(index)}
+                  onClick={() => selectFilteredEmployee(emp)}
                   style={{
                     padding: '10px',
                     cursor: 'pointer',
                     borderBottom: '1px solid #f1f5f9',
+                    backgroundColor: index === highlightedEmployeeIndex ? '#dbeafe' : '#fff',
                     fontWeight: '700',
                     color: '#334155',
                   }}
@@ -1331,6 +1447,7 @@ const tabs = [
           maxLength={5}
           value={tempTimeIn}
           onChange={(e) => setTempTimeIn(e.target.value)}
+          onBlur={() => setTempTimeIn((prev) => normalizeAttendanceTimeValue(prev))}
           onKeyDown={(e) => moveToNextAttendanceField(e, 'attendance-time-out')}
           style={{
             padding: '10px',
@@ -1350,6 +1467,7 @@ const tabs = [
           maxLength={5}
           value={tempTimeOut}
           onChange={(e) => setTempTimeOut(e.target.value)}
+          onBlur={() => setTempTimeOut((prev) => normalizeAttendanceTimeValue(prev))}
           onKeyDown={(e) => moveToNextAttendanceField(e, 'attendance-role')}
           style={{
             padding: '10px',
@@ -1454,6 +1572,7 @@ const tabs = [
                           e.target.value
                         )
                       }
+                      onBlur={() => normalizeAttendanceRowTime(row.id, 'timeIn')}
                       style={attendanceTimeInput}
                     />
                   </td>
@@ -1469,6 +1588,7 @@ const tabs = [
                           e.target.value
                         )
                       }
+                      onBlur={() => normalizeAttendanceRowTime(row.id, 'timeOut')}
                       style={attendanceTimeInput}
                     />
                   </td>
@@ -1569,8 +1689,8 @@ const tabs = [
       week_key: weekKey,
       day_name: currentDay,
       employee_name: row.name,
-      time_in: row.timeIn,
-      time_out: row.timeOut,
+      time_in: normalizeAttendanceTimeValue(row.timeIn),
+      time_out: normalizeAttendanceTimeValue(row.timeOut),
       role: row.role || 'S1',
       system: 'S1',
     }));

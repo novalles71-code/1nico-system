@@ -167,6 +167,17 @@ function getWeekInfoFromKey(key) {
   };
 }
 
+
+function formatWeekSheetName(monday) {
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const start = `${monday.getMonth() + 1}-${monday.getDate()}`;
+  const end = `${sunday.getMonth() + 1}-${sunday.getDate()}`;
+
+  return `${start} - ${end}`;
+}
+
 export default function Attendance() {
   const navigate = useNavigate();
   const currentWeek = getWeekInfo();
@@ -175,6 +186,7 @@ export default function Attendance() {
   const { monday, weekKey, weekLabel } = selectedWeek;
   const [availableWeeks, setAvailableWeeks] = useState([currentWeek.weekKey]);
   const [weeklyData, setWeeklyData] = useState({});
+  const [employeeGenderMap, setEmployeeGenderMap] = useState({});
   const [loadingAttendance, setLoadingAttendance] = useState(true);
   const [activeCell, setActiveCell] = useState(null);
   const [selectionStart, setSelectionStart] = useState(null);
@@ -190,6 +202,52 @@ export default function Attendance() {
 
     return () => {
       window.removeEventListener('mouseup', stopSelection);
+    };
+  }, []);
+
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadEmployeeGenders = async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('name, gender');
+
+      if (error) {
+        console.error('Load employee genders error:', error);
+        return;
+      }
+
+      if (!isMounted) return;
+
+      const nextGenderMap = {};
+
+      (data || []).forEach((employee) => {
+        nextGenderMap[normalizeName(employee.name)] = String(employee.gender || '')
+          .trim()
+          .toUpperCase();
+      });
+
+      setEmployeeGenderMap(nextGenderMap);
+    };
+
+    loadEmployeeGenders();
+
+    const channel = supabase
+      .channel('employee-genders-attendance')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'employees' },
+        () => {
+          loadEmployeeGenders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -946,6 +1004,146 @@ export default function Attendance() {
     return roundHours(total);
   };
 
+
+  const getPersonGender = (person) => {
+    const gender = employeeGenderMap[normalizeName(person?.name)] || '';
+
+    if (gender === 'F' || gender === 'FEMALE' || gender === 'WOMAN' || gender === 'MUJER') {
+      return 'FEMALE';
+    }
+
+    if (gender === 'M' || gender === 'MALE' || gender === 'MAN' || gender === 'HOMBRE') {
+      return 'MALE';
+    }
+
+    return '';
+  };
+
+  const normalizeRoleForExport = (roleValue, systemValue) => {
+    const role = String(roleValue || '').trim().toUpperCase();
+    const system = String(systemValue || '').trim().toUpperCase();
+    const value = role || system;
+
+    if (value === 'AST') return 'AST';
+    if (value === 'QC' || value === 'QCS') return 'QCS';
+    if (value === 'OP' || value === 'OPS') return 'OPS';
+
+    if (
+      value === 'S1' ||
+      value === 'S2' ||
+      value === 'S3' ||
+      value === 'S4' ||
+      value === 'LW'
+    ) {
+      return 'LW';
+    }
+
+    return 'LW';
+  };
+
+  const getPersonMainRole = (person) => {
+    const mondayRecord = person.days?.Monday;
+
+    if (mondayRecord?.area || mondayRecord?.system) {
+      return normalizeRoleForExport(mondayRecord.area, mondayRecord.system);
+    }
+
+    for (const day of DAYS) {
+      const record = person.days?.[day];
+
+      if (record?.area || record?.system) {
+        return normalizeRoleForExport(record.area, record.system);
+      }
+    }
+
+    return 'LW';
+  };
+
+  const getDownloadGroupKey = (person) => {
+    const role = getPersonMainRole(person);
+
+    if (role === 'AST') return 'AST';
+    if (role === 'QCS') return 'QCS';
+    if (role === 'OPS') return 'OPS';
+
+    const gender = getPersonGender(person);
+
+    if (gender === 'FEMALE') return 'LW_FEMALE';
+    if (gender === 'MALE') return 'LW_MALE';
+
+    return 'LW_UNKNOWN';
+  };
+
+  const getDownloadGroupOrder = (groupKey) => {
+    const order = {
+      AST: 1,
+      QCS: 2,
+      OPS: 3,
+      LW_FEMALE: 4,
+      LW_MALE: 5,
+      LW_UNKNOWN: 6,
+    };
+
+    return order[groupKey] || 99;
+  };
+
+
+  const addRoleLegendToAttendanceSheet = (worksheet, borderStyle) => {
+    const startCol = 24; // Column X
+    const startRow = 1;
+
+    const legend = [
+      ['TCH', 'TECHNICIAN'],
+      ['AST', 'ASSISTANT MANAGER'],
+      ['TR', 'TRAINER'],
+      ['FKL', 'FORKLIFT/HIGHREACH'],
+      ['CB', 'CARD BOARD'],
+      ['CL', 'CLEANING'],
+      ['CD', 'CARDS'],
+      ['TV1', 'BUCKETS'],
+      ['TV2', 'VERTICAL 2'],
+      ['TV3', 'VERTICAL 3'],
+      ['SH', 'SHANKLIN'],
+      ['', ''],
+      ['F4', 'FLOW WRAP 4'],
+      ['A1', 'ASSEMBLY 1'],
+      ['F5', 'FLOW WRAP 5'],
+      ['F6', 'FLOW WRAP 6'],
+      ['A2', 'ASSEMBLY 2'],
+      ['A3', 'ASSEMBLY 3'],
+      ['S1', 'SYSTEM 1 BUILDING 8'],
+      ['S4', 'SYSTEM 4 BUILDING 8'],
+      ['', ''],
+      ['B5', 'BUILDING 5'],
+      ['B7', 'BUILDING 7'],
+      ['B9', 'BUILDING 9'],
+      ['CARB', 'IN CARBONDALE'],
+      ['QCTR', 'QC IN TRAINING'],
+      ['OPTR', 'OPERATOR IN TRAINING'],
+    ];
+
+    worksheet.getColumn(startCol).width = 10;
+    worksheet.getColumn(startCol + 1).width = 30;
+
+    legend.forEach(([code, meaning], index) => {
+      const row = worksheet.getRow(startRow + index);
+      const codeCell = row.getCell(startCol);
+      const meaningCell = row.getCell(startCol + 1);
+
+      codeCell.value = code ? `${code}=` : '';
+      meaningCell.value = meaning;
+
+      [codeCell, meaningCell].forEach((cell) => {
+        cell.font = { name: 'Calibri', size: 11, bold: true };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: cell === codeCell ? 'right' : 'left',
+        };
+        cell.border = borderStyle;
+      });
+    });
+  };
+
   const addTotalHoursSheet = (workbook, rows, borderStyle, center) => {
     const sheet = workbook.addWorksheet('Total Hours', {
       pageSetup: {
@@ -985,7 +1183,7 @@ export default function Attendance() {
     titleCell.border = borderStyle;
 
     const headerRow = sheet.getRow(3);
-    ['NAMES', 'HOURS', 'REGULAR', 'EXTRA'].forEach((header, index) => {
+    ['NAMES', 'HOURS', 'REGULAR', 'OT'].forEach((header, index) => {
       const cell = headerRow.getCell(index + 1);
       cell.value = header;
       cell.font = { name: 'Calibri', size: 11, bold: true };
@@ -1228,41 +1426,20 @@ export default function Attendance() {
       return;
     }
 
-    const systemOrder = ['S1', 'S2', 'S3', 'S4'];
-
-    const getBaseSystem = (person) => {
-      const mondayRecord = person.days?.Monday;
-
-      if (mondayRecord?.system) {
-        return mondayRecord.system;
-      }
-
-      for (const day of DAYS) {
-        const record = person.days?.[day];
-
-        if (record?.system) {
-          return record.system;
-        }
-      }
-
-      return 'S4';
-    };
-
     const orderedWorkedRows = [...workedRows].sort((a, b) => {
-      const aSystemIndex = systemOrder.indexOf(getBaseSystem(a));
-      const bSystemIndex = systemOrder.indexOf(getBaseSystem(b));
+      const aGroup = getDownloadGroupKey(a);
+      const bGroup = getDownloadGroupKey(b);
+      const aGroupOrder = getDownloadGroupOrder(aGroup);
+      const bGroupOrder = getDownloadGroupOrder(bGroup);
 
-      const safeAIndex = aSystemIndex === -1 ? 99 : aSystemIndex;
-      const safeBIndex = bSystemIndex === -1 ? 99 : bSystemIndex;
-
-      if (safeAIndex !== safeBIndex) return safeAIndex - safeBIndex;
+      if (aGroupOrder !== bGroupOrder) return aGroupOrder - bGroupOrder;
 
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
 
     const workbook = new ExcelJS.Workbook();
 
-    const worksheet = workbook.addWorksheet('Attendance', {
+    const worksheet = workbook.addWorksheet(formatWeekSheetName(monday), {
       pageSetup: {
         paperSize: 9,
         orientation: 'landscape',
@@ -1307,8 +1484,8 @@ export default function Attendance() {
       horizontal: 'center',
     };
 
-    worksheet.getCell('A1').value = 'Employee';
-    worksheet.getCell('A1').font = { name: 'Calibri', size: 11, bold: true };
+    worksheet.getCell('A1').value = 'BUILDING 8';
+    worksheet.getCell('A1').font = { name: 'Calibri', size: 14, bold: true };
     worksheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' };
     worksheet.getCell('A1').border = borderStyle;
 
@@ -1351,25 +1528,27 @@ export default function Attendance() {
     });
 
     let currentRow = 3;
-    let previousSystem = null;
+    let previousDownloadGroup = null;
 
     orderedWorkedRows.forEach((person) => {
-      const currentSystem = getBaseSystem(person);
+      const currentDownloadGroup = getDownloadGroupKey(person);
 
-      if (previousSystem && previousSystem !== currentSystem) {
-        const spacerRow = worksheet.getRow(currentRow);
+      if (previousDownloadGroup && previousDownloadGroup !== currentDownloadGroup) {
+        for (let spacerIndex = 0; spacerIndex < 2; spacerIndex += 1) {
+          const spacerRow = worksheet.getRow(currentRow);
 
-        for (let col = 1; col <= 22; col += 1) {
-          const cell = spacerRow.getCell(col);
-          cell.value = '';
-          cell.border = thinBorderStyle;
+          for (let col = 1; col <= 22; col += 1) {
+            const cell = spacerRow.getCell(col);
+            cell.value = '';
+            cell.border = thinBorderStyle;
+          }
+
+          spacerRow.height = 12;
+          currentRow += 1;
         }
-
-        spacerRow.height = 12;
-        currentRow += 1;
       }
 
-      previousSystem = currentSystem;
+      previousDownloadGroup = currentDownloadGroup;
 
       const row = worksheet.getRow(currentRow);
 
@@ -1434,6 +1613,7 @@ export default function Attendance() {
       });
     });
 
+    addRoleLegendToAttendanceSheet(worksheet, borderStyle);
     addTotalHoursSheet(workbook, orderedWorkedRows, borderStyle, center);
     addRoleSummarySheet(workbook, orderedWorkedRows, borderStyle, center);
 
@@ -1443,7 +1623,7 @@ export default function Attendance() {
       new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       }),
-      `weekly-attendance-${weekKey}.xlsx`
+      `WEEKLY ATTENDANCE B8 ${weekKey}.xlsx`
     );
 
     const { error: deleteError } = await supabase

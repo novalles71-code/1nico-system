@@ -106,6 +106,7 @@ export default function Employees() {
 
   const [employees, setEmployees] = useState([]);
   const [name, setName] = useState('');
+  const [gender, setGender] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -180,6 +181,7 @@ export default function Employees() {
     const { error } = await supabase.from('employees').insert({
       name: cleanName,
       active: true,
+      gender: gender || null,
     });
 
     if (error) {
@@ -189,6 +191,7 @@ export default function Employees() {
     }
 
     setName('');
+    setGender('');
     await loadEmployees();
   };
 
@@ -219,6 +222,22 @@ export default function Employees() {
     if (error) {
       console.error('Toggle employee error:', error);
       alert('Unable to update employee.');
+      return;
+    }
+
+    await loadEmployees();
+  };
+
+
+  const updateEmployeeGender = async (id, nextGender) => {
+    const { error } = await supabase
+      .from('employees')
+      .update({ gender: nextGender || null })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Update employee gender error:', error);
+      alert('Unable to update employee gender.');
       return;
     }
 
@@ -282,6 +301,16 @@ export default function Employees() {
               style={inputStyle}
             />
 
+            <select
+              value={gender}
+              onChange={(e) => setGender(e.target.value)}
+              style={{ ...inputStyle, flex: '0 0 170px', minWidth: '170px' }}
+            >
+              <option value="">Gender...</option>
+              <option value="F">Female</option>
+              <option value="M">Male</option>
+            </select>
+
             <button onClick={addEmployee} style={addButtonStyle}>
               + Add
             </button>
@@ -320,6 +349,7 @@ export default function Employees() {
                 <tr style={{ backgroundColor: '#0f172a' }}>
                   <th style={thStyle}>#</th>
                   <th style={thStyle}>Employee</th>
+                  <th style={thStyle}>Gender</th>
                   <th style={thStyle}>Status</th>
                   <th style={thStyle}>Action</th>
                 </tr>
@@ -338,6 +368,18 @@ export default function Employees() {
                       }}
                     >
                       {employee.name}
+                    </td>
+
+                    <td style={tdStyle}>
+                      <select
+                        value={employee.gender || ''}
+                        onChange={(e) => updateEmployeeGender(employee.id, e.target.value)}
+                        style={genderSelectStyle}
+                      >
+                        <option value="">--</option>
+                        <option value="F">Female</option>
+                        <option value="M">Male</option>
+                      </select>
                     </td>
 
                     <td style={tdStyle}>
@@ -544,6 +586,17 @@ const smallButtonStyle = {
   padding: '7px 10px',
   fontWeight: '900',
   cursor: 'pointer',
+};
+
+
+const genderSelectStyle = {
+  backgroundColor: '#0f172a',
+  color: '#f8fafc',
+  border: '1px solid #334155',
+  borderRadius: '8px',
+  padding: '7px 10px',
+  fontWeight: '800',
+  outline: 'none',
 };
 
 const emptyStyle = {
