@@ -1491,7 +1491,7 @@ export default function Attendance() {
           };
         }
 
-        spacerRow.height = 20;
+        spacerRow.height = 5;
 
         currentRow += 1;
       }
