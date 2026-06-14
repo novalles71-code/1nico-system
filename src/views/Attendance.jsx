@@ -1535,13 +1535,18 @@ export default function Attendance() {
 
       if (previousDownloadGroup && previousDownloadGroup !== currentDownloadGroup) {
         for (let spacerIndex = 0; spacerIndex < 2; spacerIndex += 1) {
-          const spacerRow = worksheet.getRow(currentRow);
+          worksheet.mergeCells(currentRow, 1, currentRow, 22);
 
-          for (let col = 1; col <= 22; col += 1) {
-            const cell = spacerRow.getCell(col);
-            cell.value = '';
-            cell.border = thinBorderStyle;
-          }
+          const spacerRow = worksheet.getRow(currentRow);
+          const spacerCell = spacerRow.getCell(1);
+
+          spacerCell.value = '';
+          spacerCell.border = thinBorderStyle;
+          spacerCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFFFFF' },
+          };
 
           spacerRow.height = 12;
           currentRow += 1;
@@ -1581,6 +1586,16 @@ export default function Attendance() {
             type: 'pattern',
             pattern: 'solid',
             fgColor: { argb: 'FFDDEBF7' },
+          };
+        }
+
+        const timeOutMinutes = parseTimeToMinutes(record?.timeOut);
+
+        if (timeOutMinutes !== null && timeOutMinutes < 18 * 60) {
+          row.getCell(startCol + 1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFFF00' },
           };
         }
 
