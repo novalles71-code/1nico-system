@@ -1478,10 +1478,17 @@ export default function Attendance() {
 
         worksheet.mergeCells(spacerStartRow, 1, spacerStartRow, 22);
 
-        const spacerRow = worksheet.getRow(spacerStartRow);
+        const spacerCell = worksheet.getCell(spacerStartRow, 1);
+        spacerCell.value = '';
+        spacerCell.border = {};
+        spacerCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFFFF' },
+        };
 
         for (let col = 1; col <= 22; col += 1) {
-          const cell = spacerRow.getCell(col);
+          const cell = worksheet.getCell(spacerStartRow, col);
           cell.value = '';
           cell.border = {};
           cell.fill = {
@@ -1491,7 +1498,7 @@ export default function Attendance() {
           };
         }
 
-        spacerRow.height = 20;
+        worksheet.getRow(spacerStartRow).height = 20;
 
         currentRow += 1;
       }
