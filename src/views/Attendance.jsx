@@ -1086,64 +1086,6 @@ export default function Attendance() {
 
     return order[groupKey] || 99;
   };
-
-
-  const addRoleLegendToAttendanceSheet = (worksheet, borderStyle) => {
-    const startCol = 24; // Column X
-    const startRow = 3;
-
-    const legend = [
-      ['TCH', 'TECHNICIAN'],
-      ['AST', 'ASSISTANT MANAGER'],
-      ['TR', 'TRAINER'],
-      ['FKL', 'FORKLIFT/HIGHREACH'],
-      ['CB', 'CARD BOARD'],
-      ['CL', 'CLEANING'],
-      ['CD', 'CARDS'],
-      ['TV1', 'BUCKETS'],
-      ['TV2', 'VERTICAL 2'],
-      ['TV3', 'VERTICAL 3'],
-      ['SH', 'SHANKLIN'],
-      ['', ''],
-      ['F4', 'FLOW WRAP 4'],
-      ['A1', 'ASSEMBLY 1'],
-      ['F5', 'FLOW WRAP 5'],
-      ['F6', 'FLOW WRAP 6'],
-      ['A2', 'ASSEMBLY 2'],
-      ['A3', 'ASSEMBLY 3'],
-      ['S1', 'SYSTEM 1 BUILDING 8'],
-      ['S4', 'SYSTEM 4 BUILDING 8'],
-      ['', ''],
-      ['B5', 'BUILDING 5'],
-      ['B7', 'BUILDING 7'],
-      ['B9', 'BUILDING 9'],
-      ['CARB', 'IN CARBONDALE'],
-      ['QCTR', 'QC IN TRAINING'],
-      ['OPTR', 'OPERATOR IN TRAINING'],
-    ];
-
-    worksheet.getColumn(startCol).width = 10;
-    worksheet.getColumn(startCol + 1).width = 30;
-
-    legend.forEach(([code, meaning], index) => {
-      const row = worksheet.getRow(startRow + index);
-      const codeCell = row.getCell(startCol);
-      const meaningCell = row.getCell(startCol + 1);
-
-      codeCell.value = code ? `${code}=` : '';
-      meaningCell.value = meaning;
-
-      [codeCell, meaningCell].forEach((cell) => {
-        cell.font = { name: 'Calibri', size: 11, bold: true };
-        cell.alignment = {
-          vertical: 'middle',
-          horizontal: cell === codeCell ? 'right' : 'left',
-        };
-        cell.border = borderStyle;
-      });
-    });
-  };
-
   const addTotalHoursSheet = (workbook, rows, borderStyle, center) => {
     const sheet = workbook.addWorksheet('Total Hours', {
       pageSetup: {
@@ -1635,7 +1577,6 @@ export default function Attendance() {
       });
     });
 
-    addRoleLegendToAttendanceSheet(worksheet, borderStyle);
     addTotalHoursSheet(workbook, orderedWorkedRows, borderStyle, center);
     addRoleSummarySheet(workbook, orderedWorkedRows, borderStyle, center);
 
