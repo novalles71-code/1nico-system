@@ -1090,7 +1090,7 @@ export default function Attendance() {
 
   const addRoleLegendToAttendanceSheet = (worksheet, borderStyle) => {
     const startCol = 24; // Column X
-    const startRow = 1;
+    const startRow = 3;
 
     const legend = [
       ['TCH', 'TECHNICIAN'],
@@ -1529,12 +1529,14 @@ export default function Attendance() {
 
     let currentRow = 3;
     let previousDownloadGroup = null;
+    const spacerRows = new Set();
 
     orderedWorkedRows.forEach((person) => {
       const currentDownloadGroup = getDownloadGroupKey(person);
 
       if (previousDownloadGroup && previousDownloadGroup !== currentDownloadGroup) {
         for (let spacerIndex = 0; spacerIndex < 2; spacerIndex += 1) {
+          spacerRows.add(currentRow);
           worksheet.mergeCells(currentRow, 1, currentRow, 22);
 
           const spacerRow = worksheet.getRow(currentRow);
@@ -1616,7 +1618,9 @@ export default function Attendance() {
       currentRow += 1;
     });
 
-    worksheet.eachRow((row) => {
+    worksheet.eachRow((row, rowNumber) => {
+      if (spacerRows.has(rowNumber)) return;
+
       row.eachCell({ includeEmpty: true }, (cell) => {
         cell.border = cell.border || borderStyle;
         cell.font = {
