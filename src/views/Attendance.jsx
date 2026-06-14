@@ -1421,6 +1421,8 @@ export default function Attendance() {
       horizontal: 'center',
     };
 
+    worksheet.getRow(1).height = 30;
+
     worksheet.getCell('A1').value = 'BUILDING 8';
     worksheet.getCell('A1').font = { name: 'Calibri', size: 14, bold: true };
     worksheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' };
