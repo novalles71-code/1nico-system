@@ -1088,6 +1088,7 @@ export default function Attendance() {
   };
 
 
+
   const addTotalHoursSheet = (workbook, rows, borderStyle, center) => {
     const sheet = workbook.addWorksheet('Total Hours', {
       pageSetup: {
@@ -1416,6 +1417,13 @@ export default function Attendance() {
       right: { style: 'medium', color: { argb: 'FF000000' } },
     };
 
+    const thinBorderStyle = {
+      top: { style: 'thin', color: { argb: 'FF000000' } },
+      left: { style: 'thin', color: { argb: 'FF000000' } },
+      bottom: { style: 'thin', color: { argb: 'FF000000' } },
+      right: { style: 'thin', color: { argb: 'FF000000' } },
+    };
+
     const center = {
       vertical: 'middle',
       horizontal: 'center',
@@ -1486,17 +1494,6 @@ export default function Attendance() {
           pattern: 'solid',
           fgColor: { argb: 'FFFFFFFF' },
         };
-
-        for (let col = 1; col <= 22; col += 1) {
-          const cell = worksheet.getCell(spacerStartRow, col);
-          cell.value = '';
-          cell.border = {};
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFFFFFFF' },
-          };
-        }
 
         worksheet.getRow(spacerStartRow).height = 20;
 
