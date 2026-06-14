@@ -7,7 +7,11 @@ const VALID_USERNAME = 'noy';
 const VALID_PASSWORD = 'noelik05';
 
 const HOME_SYSTEM_NAME = 'home';
-const HOME_DEVICE_KEY = 'home_device_token';
+const HOME_DEVICE_KEY = 'home_device_id';
+
+function createDeviceId() {
+  return crypto.randomUUID();
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -24,27 +28,27 @@ export default function Login() {
   }, []);
 
   const checkSavedDevice = async () => {
-    const savedToken = localStorage.getItem(HOME_DEVICE_KEY);
+    const savedDeviceId = localStorage.getItem(HOME_DEVICE_KEY);
 
-    if (!savedToken) {
+    if (!savedDeviceId) {
       setDeviceAuthorized(false);
       setCheckingDevice(false);
       return;
     }
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('device_authorizations')
       .select('*')
       .eq('system_name', HOME_SYSTEM_NAME)
-      .eq('device_token', savedToken)
+      .eq('device_token', savedDeviceId)
       .eq('is_active', true)
       .maybeSingle();
 
-    if (error || !data) {
+    if (data) {
+      setDeviceAuthorized(true);
+    } else {
       localStorage.removeItem(HOME_DEVICE_KEY);
       setDeviceAuthorized(false);
-    } else {
-      setDeviceAuthorized(true);
     }
 
     setCheckingDevice(false);
@@ -69,11 +73,25 @@ export default function Login() {
       .maybeSingle();
 
     if (error || !data) {
-      alert('Invalid or inactive access token');
+      alert('Invalid or already used access token');
       return;
     }
 
-    localStorage.setItem(HOME_DEVICE_KEY, token);
+    const newDeviceId = createDeviceId();
+
+    const { error: updateError } = await supabase
+      .from('device_authorizations')
+      .update({
+        device_token: newDeviceId,
+      })
+      .eq('id', data.id);
+
+    if (updateError) {
+      alert('Could not authorize this device');
+      return;
+    }
+
+    localStorage.setItem(HOME_DEVICE_KEY, newDeviceId);
     setDeviceAuthorized(true);
     setAccessToken('');
   };
@@ -146,10 +164,7 @@ export default function Login() {
       <Card>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={logoStyle}>1NICO</div>
-
-          <h2 style={titleStyle}>
-            Internal System
-          </h2>
+          <h2 style={titleStyle}>Internal System</h2>
         </div>
 
         <form onSubmit={handleSubmit} style={formStyle}>
@@ -209,7 +224,6 @@ function PageWrapper({ children }) {
       justifyContent: 'center',
       alignItems: 'center',
       fontFamily: 'system-ui, sans-serif',
-      margin: 0,
     }}>
       {children}
     </div>
