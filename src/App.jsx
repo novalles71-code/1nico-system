@@ -11,6 +11,7 @@ import News from './views/News';
 import Employees from './views/Employees';
 import Attendance from './views/Attendance';
 import DeviceAccess from './views/DeviceAccess';
+import ProtectedAdminRoute from './components/ProtectedAdminRoute';
 
 function App() {
   return (
@@ -23,13 +24,68 @@ function App() {
         <Route path="/system-3" element={<System3 />} />
         <Route path="/system-4" element={<System4 />} />
 
-        <Route path="/home" element={<Home />} />
-        <Route path="/break-control" element={<BreakControl />} />
-        <Route path="/groups" element={<Groups />} />
-        <Route path="/news" element={<News />} />
-        <Route path="/employees" element={<Employees />} />
-        <Route path="/attendance" element={<Attendance />} />
-        <Route path="/device-access" element={<DeviceAccess />} />
+        <Route
+  path="/home"
+  element={
+    <ProtectedAdminRoute>
+      <Home />
+    </ProtectedAdminRoute>
+  }
+/>
+
+<Route
+  path="/break-control"
+  element={
+    <ProtectedAdminRoute>
+      <BreakControl />
+    </ProtectedAdminRoute>
+  }
+/>
+
+<Route
+  path="/groups"
+  element={
+    <ProtectedAdminRoute>
+      <Groups />
+    </ProtectedAdminRoute>
+  }
+/>
+
+<Route
+  path="/news"
+  element={
+    <ProtectedAdminRoute>
+      <News />
+    </ProtectedAdminRoute>
+  }
+/>
+
+<Route
+  path="/employees"
+  element={
+    <ProtectedAdminRoute>
+      <Employees />
+    </ProtectedAdminRoute>
+  }
+/>
+
+<Route
+  path="/attendance"
+  element={
+    <ProtectedAdminRoute>
+      <Attendance />
+    </ProtectedAdminRoute>
+  }
+/>
+
+<Route
+  path="/device-access"
+  element={
+    <ProtectedAdminRoute>
+      <DeviceAccess />
+    </ProtectedAdminRoute>
+  }
+/>
       </Routes>
     </Router>
   );

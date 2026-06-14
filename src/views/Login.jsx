@@ -9,9 +9,23 @@ const VALID_PASSWORD = 'noelik05';
 const HOME_SYSTEM_NAME = 'home';
 const HOME_DEVICE_KEY = 'home_device_id';
 
-function createDeviceId() {
-  return crypto.randomUUID();
-}
+const getDeviceFingerprint = async () => {
+  const raw = [
+    navigator.userAgent,
+    navigator.language,
+    navigator.platform,
+    screen.width,
+    screen.height,
+    screen.colorDepth,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+  ].join('|');
+
+  const encoded = new TextEncoder().encode(raw);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+};
 
 export default function Login() {
   const navigate = useNavigate();
@@ -29,25 +43,33 @@ export default function Login() {
 
   const checkSavedDevice = async () => {
     const savedDeviceId = localStorage.getItem(HOME_DEVICE_KEY);
+    const fingerprint = await getDeviceFingerprint();
 
-    if (!savedDeviceId) {
-      setDeviceAuthorized(false);
-      setCheckingDevice(false);
-      return;
-    }
-
-    const { data } = await supabase
+    let query = supabase
       .from('device_authorizations')
       .select('*')
       .eq('system_name', HOME_SYSTEM_NAME)
-      .eq('device_token', savedDeviceId)
-      .eq('is_active', true)
-      .maybeSingle();
+      .eq('is_active', true);
+
+    if (savedDeviceId) {
+      query = query.eq('device_token', savedDeviceId);
+    } else {
+      query = query.eq('device_fingerprint', fingerprint);
+    }
+
+    const { data } = await query.maybeSingle();
 
     if (data) {
+      localStorage.setItem(HOME_DEVICE_KEY, data.device_token);
+
+      await supabase
+        .from('device_authorizations')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', data.id);
+
       setDeviceAuthorized(true);
     } else {
-      localStorage.removeItem(HOME_DEVICE_KEY);
+      localStorage.removeItem('isAdminLoggedIn');
       setDeviceAuthorized(false);
     }
 
@@ -58,6 +80,7 @@ export default function Login() {
     e.preventDefault();
 
     const token = accessToken.trim().toUpperCase();
+    const fingerprint = await getDeviceFingerprint();
 
     if (!token) {
       alert('Enter access token');
@@ -77,12 +100,14 @@ export default function Login() {
       return;
     }
 
-    const newDeviceId = createDeviceId();
+    const newDeviceId = crypto.randomUUID();
 
     const { error: updateError } = await supabase
       .from('device_authorizations')
       .update({
         device_token: newDeviceId,
+        device_fingerprint: fingerprint,
+        last_seen: new Date().toISOString(),
       })
       .eq('id', data.id);
 
