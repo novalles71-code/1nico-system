@@ -108,6 +108,7 @@ export default function DeviceAccess() {
               onChange={(e) => setSystemName(e.target.value)}
               style={inputStyle}
             >
+              <option value="home">Home / Login</option>
               <option value="system1">System 1</option>
               <option value="system2">System 2</option>
               <option value="system3">System 3</option>

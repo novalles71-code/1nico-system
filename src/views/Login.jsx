@@ -1,106 +1,163 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, User } from 'lucide-react';
+import { Lock, User, ShieldCheck } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
-// Define aquí las credenciales que vas a usar
 const VALID_USERNAME = 'noy';
 const VALID_PASSWORD = 'noelik05';
+
+const HOME_SYSTEM_NAME = 'home';
+const HOME_DEVICE_KEY = 'home_device_token';
 
 export default function Login() {
   const navigate = useNavigate();
 
+  const [checkingDevice, setCheckingDevice] = useState(true);
+  const [deviceAuthorized, setDeviceAuthorized] = useState(false);
+  const [accessToken, setAccessToken] = useState('');
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+
+  useEffect(() => {
+    checkSavedDevice();
+  }, []);
+
+  const checkSavedDevice = async () => {
+    const savedToken = localStorage.getItem(HOME_DEVICE_KEY);
+
+    if (!savedToken) {
+      setDeviceAuthorized(false);
+      setCheckingDevice(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('device_authorizations')
+      .select('*')
+      .eq('system_name', HOME_SYSTEM_NAME)
+      .eq('device_token', savedToken)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error || !data) {
+      localStorage.removeItem(HOME_DEVICE_KEY);
+      setDeviceAuthorized(false);
+    } else {
+      setDeviceAuthorized(true);
+    }
+
+    setCheckingDevice(false);
+  };
+
+  const handleDeviceAccess = async (e) => {
+    e.preventDefault();
+
+    const token = accessToken.trim().toUpperCase();
+
+    if (!token) {
+      alert('Enter access token');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('device_authorizations')
+      .select('*')
+      .eq('system_name', HOME_SYSTEM_NAME)
+      .eq('device_token', token)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error || !data) {
+      alert('Invalid or inactive access token');
+      return;
+    }
+
+    localStorage.setItem(HOME_DEVICE_KEY, token);
+    setDeviceAuthorized(true);
+    setAccessToken('');
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Validación de tus credenciales
     if (username === VALID_USERNAME && password === VALID_PASSWORD) {
-
-      // GUARDA SESIÓN ADMIN
       localStorage.setItem('isAdminLoggedIn', 'true');
-
-      // REDIRIGE AL DASHBOARD
       navigate('/home');
-
     } else {
       alert('Invalid username or password');
     }
   };
 
-  return (
-    <div style={{
-      backgroundColor: '#0f172a',
-      minHeight: '100vh',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      fontFamily: 'system-ui, sans-serif',
-      margin: 0
-    }}>
-      <div style={{
-        backgroundColor: '#1e293b',
-        padding: '40px',
-        borderRadius: '12px',
-        border: '1px solid #334155',
-        width: '100%',
-        maxWidth: '400px',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
-      }}>
+  if (checkingDevice) {
+    return (
+      <PageWrapper>
+        <Card>
+          <h2 style={titleStyle}>Checking Device...</h2>
+          <p style={subtitleStyle}>Please wait.</p>
+        </Card>
+      </PageWrapper>
+    );
+  }
 
-        {/* Encabezado limpio: Solo Logo y Título */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            fontSize: '2rem',
-            fontWeight: '800',
-            color: '#ffffff',
-            letterSpacing: '-1px',
-            marginBottom: '4px'
-          }}>
-            1NICO
+  if (!deviceAuthorized) {
+    return (
+      <PageWrapper>
+        <Card>
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <div style={logoStyle}>1NICO</div>
+            <h2 style={titleStyle}>Device Access Required</h2>
+            <p style={subtitleStyle}>
+              Enter the access token to authorize this device.
+            </p>
           </div>
 
-          <h2 style={{
-            fontSize: '1.25rem',
-            color: '#f8fafc',
-            margin: 0,
-            fontWeight: '600'
-          }}>
+          <form onSubmit={handleDeviceAccess} style={formStyle}>
+            <div>
+              <label style={labelStyle}>Access Token</label>
+
+              <div style={{ position: 'relative' }}>
+                <span style={iconStyle}>
+                  <ShieldCheck size={18} />
+                </span>
+
+                <input
+                  type="text"
+                  value={accessToken}
+                  onChange={(e) => setAccessToken(e.target.value.toUpperCase())}
+                  placeholder="HOME-XXXXXX"
+                  required
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
+            <button type="submit" style={buttonStyle}>
+              Authorize Device
+            </button>
+          </form>
+        </Card>
+      </PageWrapper>
+    );
+  }
+
+  return (
+    <PageWrapper>
+      <Card>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={logoStyle}>1NICO</div>
+
+          <h2 style={titleStyle}>
             Internal System
           </h2>
         </div>
 
-        {/* Formulario */}
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px'
-          }}
-        >
-
-          {/* Campo Usuario */}
+        <form onSubmit={handleSubmit} style={formStyle}>
           <div>
-            <label style={{
-              display: 'block',
-              color: '#94a3b8',
-              fontSize: '0.85rem',
-              marginBottom: '6px'
-            }}>
-              Username
-            </label>
+            <label style={labelStyle}>Username</label>
 
             <div style={{ position: 'relative' }}>
-              <span style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#64748b',
-                display: 'flex'
-              }}>
+              <span style={iconStyle}>
                 <User size={18} />
               </span>
 
@@ -110,41 +167,16 @@ export default function Login() {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Your username"
                 required
-                style={{
-                  width: '100%',
-                  backgroundColor: '#0f172a',
-                  border: '1px solid #334155',
-                  borderRadius: '6px',
-                  padding: '10px 12px 10px 40px',
-                  color: '#f8fafc',
-                  fontSize: '0.95rem',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                style={inputStyle}
               />
             </div>
           </div>
 
-          {/* Campo Contraseña */}
           <div>
-            <label style={{
-              display: 'block',
-              color: '#94a3b8',
-              fontSize: '0.85rem',
-              marginBottom: '6px'
-            }}>
-              Password
-            </label>
+            <label style={labelStyle}>Password</label>
 
             <div style={{ position: 'relative' }}>
-              <span style={{
-                position: 'absolute',
-                left: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#64748b',
-                display: 'flex'
-              }}>
+              <span style={iconStyle}>
                 <Lock size={18} />
               </span>
 
@@ -154,43 +186,115 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                style={{
-                  width: '100%',
-                  backgroundColor: '#0f172a',
-                  border: '1px solid #334155',
-                  borderRadius: '6px',
-                  padding: '10px 12px 10px 40px',
-                  color: '#f8fafc',
-                  fontSize: '0.95rem',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                style={inputStyle}
               />
             </div>
           </div>
 
-          {/* Botón de Entrada */}
-          <button
-            type="submit"
-            style={{
-              backgroundColor: '#38bdf8',
-              color: '#0f172a',
-              border: 'none',
-              padding: '12px',
-              borderRadius: '6px',
-              fontWeight: 'bold',
-              fontSize: '0.95rem',
-              cursor: 'pointer',
-              marginTop: '10px',
-              transition: 'background-color 0.2s'
-            }}
-          >
+          <button type="submit" style={buttonStyle}>
             Sign In
           </button>
-
         </form>
+      </Card>
+    </PageWrapper>
+  );
+}
 
-      </div>
+function PageWrapper({ children }) {
+  return (
+    <div style={{
+      backgroundColor: '#0f172a',
+      minHeight: '100vh',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      fontFamily: 'system-ui, sans-serif',
+      margin: 0,
+    }}>
+      {children}
     </div>
   );
 }
+
+function Card({ children }) {
+  return (
+    <div style={{
+      backgroundColor: '#1e293b',
+      padding: '40px',
+      borderRadius: '12px',
+      border: '1px solid #334155',
+      width: '100%',
+      maxWidth: '400px',
+      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+const logoStyle = {
+  fontSize: '2rem',
+  fontWeight: '800',
+  color: '#ffffff',
+  letterSpacing: '-1px',
+  marginBottom: '4px',
+};
+
+const titleStyle = {
+  fontSize: '1.25rem',
+  color: '#f8fafc',
+  margin: 0,
+  fontWeight: '600',
+};
+
+const subtitleStyle = {
+  color: '#94a3b8',
+  fontSize: '0.9rem',
+  marginTop: '10px',
+};
+
+const formStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '20px',
+};
+
+const labelStyle = {
+  display: 'block',
+  color: '#94a3b8',
+  fontSize: '0.85rem',
+  marginBottom: '6px',
+};
+
+const iconStyle = {
+  position: 'absolute',
+  left: '12px',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  color: '#64748b',
+  display: 'flex',
+};
+
+const inputStyle = {
+  width: '100%',
+  backgroundColor: '#0f172a',
+  border: '1px solid #334155',
+  borderRadius: '6px',
+  padding: '10px 12px 10px 40px',
+  color: '#f8fafc',
+  fontSize: '0.95rem',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+
+const buttonStyle = {
+  backgroundColor: '#38bdf8',
+  color: '#0f172a',
+  border: 'none',
+  padding: '12px',
+  borderRadius: '6px',
+  fontWeight: 'bold',
+  fontSize: '0.95rem',
+  cursor: 'pointer',
+  marginTop: '10px',
+};
