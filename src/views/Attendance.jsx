@@ -172,8 +172,8 @@ function formatWeekSheetName(monday) {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
 
-  const start = `${monday.getMonth() + 1}/${monday.getDate()}`;
-  const end = `${sunday.getMonth() + 1}/${sunday.getDate()}`;
+  const start = `${monday.getMonth() + 1}.${monday.getDate()}`;
+  const end = `${sunday.getMonth() + 1}.${sunday.getDate()}`;
 
   return `${start} - ${end}`;
 }
@@ -1491,7 +1491,7 @@ export default function Attendance() {
           };
         }
 
-        spacerRow.height = 5;
+        spacerRow.height = 20;
 
         currentRow += 1;
       }
