@@ -1492,7 +1492,7 @@ export default function Attendance() {
           fgColor: { argb: 'FFFFFFFF' },
         };
 
-        worksheet.getRow(spacerStartRow).height = 2;
+        worksheet.getRow(spacerStartRow).height = 5;
 
         currentRow += 1;
       }
