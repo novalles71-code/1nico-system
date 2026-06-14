@@ -172,8 +172,8 @@ function formatWeekSheetName(monday) {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
 
-  const start = `${monday.getMonth() + 1}/${monday.getDate()}`;
-  const end = `${sunday.getMonth() + 1}/${sunday.getDate()}`;
+  const start = `${monday.getMonth() + 1}-${monday.getDate()}`;
+  const end = `${sunday.getMonth() + 1}-${sunday.getDate()}`;
 
   return `${start} - ${end}`;
 }
@@ -1086,6 +1086,64 @@ export default function Attendance() {
 
     return order[groupKey] || 99;
   };
+
+
+  const addRoleLegendToAttendanceSheet = (worksheet, borderStyle) => {
+    const startCol = 24; // Column X
+    const startRow = 3;
+
+    const legend = [
+      ['TCH', 'TECHNICIAN'],
+      ['AST', 'ASSISTANT MANAGER'],
+      ['TR', 'TRAINER'],
+      ['FKL', 'FORKLIFT/HIGHREACH'],
+      ['CB', 'CARD BOARD'],
+      ['CL', 'CLEANING'],
+      ['CD', 'CARDS'],
+      ['TV1', 'BUCKETS'],
+      ['TV2', 'VERTICAL 2'],
+      ['TV3', 'VERTICAL 3'],
+      ['SH', 'SHANKLIN'],
+      ['', ''],
+      ['F4', 'FLOW WRAP 4'],
+      ['A1', 'ASSEMBLY 1'],
+      ['F5', 'FLOW WRAP 5'],
+      ['F6', 'FLOW WRAP 6'],
+      ['A2', 'ASSEMBLY 2'],
+      ['A3', 'ASSEMBLY 3'],
+      ['S1', 'SYSTEM 1 BUILDING 8'],
+      ['S4', 'SYSTEM 4 BUILDING 8'],
+      ['', ''],
+      ['B5', 'BUILDING 5'],
+      ['B7', 'BUILDING 7'],
+      ['B9', 'BUILDING 9'],
+      ['CARB', 'IN CARBONDALE'],
+      ['QCTR', 'QC IN TRAINING'],
+      ['OPTR', 'OPERATOR IN TRAINING'],
+    ];
+
+    worksheet.getColumn(startCol).width = 10;
+    worksheet.getColumn(startCol + 1).width = 30;
+
+    legend.forEach(([code, meaning], index) => {
+      const row = worksheet.getRow(startRow + index);
+      const codeCell = row.getCell(startCol);
+      const meaningCell = row.getCell(startCol + 1);
+
+      codeCell.value = code ? `${code}=` : '';
+      meaningCell.value = meaning;
+
+      [codeCell, meaningCell].forEach((cell) => {
+        cell.font = { name: 'Calibri', size: 11, bold: true };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: cell === codeCell ? 'right' : 'left',
+        };
+        cell.border = borderStyle;
+      });
+    });
+  };
+
   const addTotalHoursSheet = (workbook, rows, borderStyle, center) => {
     const sheet = workbook.addWorksheet('Total Hours', {
       pageSetup: {
@@ -1478,23 +1536,26 @@ export default function Attendance() {
 
       if (previousDownloadGroup && previousDownloadGroup !== currentDownloadGroup) {
         const spacerStartRow = currentRow;
+        const spacerEndRow = currentRow + 1;
 
         spacerRows.add(spacerStartRow);
+        spacerRows.add(spacerEndRow);
 
-        worksheet.mergeCells(spacerStartRow, 1, spacerStartRow, 22);
+        worksheet.mergeCells(spacerStartRow, 1, spacerEndRow, 22);
 
         const spacerCell = worksheet.getCell(spacerStartRow, 1);
         spacerCell.value = '';
-        spacerCell.border = {};
+        spacerCell.border = thinBorderStyle;
         spacerCell.fill = {
           type: 'pattern',
           pattern: 'solid',
           fgColor: { argb: 'FFFFFFFF' },
         };
 
-        worksheet.getRow(spacerStartRow).height = 8;
+        worksheet.getRow(spacerStartRow).height = 20;
+        worksheet.getRow(spacerEndRow).height = 20;
 
-        currentRow += 1;
+        currentRow += 2;
       }
 
       previousDownloadGroup = currentDownloadGroup;
@@ -1574,6 +1635,7 @@ export default function Attendance() {
       });
     });
 
+    addRoleLegendToAttendanceSheet(worksheet, borderStyle);
     addTotalHoursSheet(workbook, orderedWorkedRows, borderStyle, center);
     addRoleSummarySheet(workbook, orderedWorkedRows, borderStyle, center);
 
