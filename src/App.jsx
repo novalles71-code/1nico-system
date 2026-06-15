@@ -12,6 +12,7 @@ import Employees from './views/Employees';
 import Attendance from './views/Attendance';
 import DeviceAccess from './views/DeviceAccess';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
+import Supplies from './views/Supplies';
 
 function App() {
   return (
@@ -86,6 +87,17 @@ function App() {
     </ProtectedAdminRoute>
   }
 />
+
+
+<Route
+  path="/supplies"
+  element={
+    <ProtectedAdminRoute>
+      <Supplies />
+    </ProtectedAdminRoute>
+  }
+/>
+
       </Routes>
     </Router>
   );

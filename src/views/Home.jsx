@@ -4,7 +4,8 @@ import {
   Coffee, 
   Users, 
   Newspaper,
-  Database
+  Database,
+  Package
 } from 'lucide-react';
 
 export default function Home() {
@@ -89,6 +90,14 @@ export default function Home() {
       desc: 'Manage authorized PCs and system access.',
       icon: <Database size={40} />,
       path: '/device-access'
+    },
+
+    {
+    id: 11,
+    title: 'SUPPLIES',
+    desc: 'Weekly supplies stock and Word report.',
+    icon: <Package size={40} />,
+    path: '/supplies'
     },
   ];
 
