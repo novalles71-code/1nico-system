@@ -1,105 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { readEmployeesFromExcel, cleanEmployeeName } from '../utils/excelEmployees';
 
-const DEFAULT_EMPLOYEES = [
-  { name: 'JOAN ENMANUEL DE LA CRUZ YNOA', active: true },
-  { name: 'SUZAN I NAYOAN', active: true },
-  { name: 'RANDY DE JESUS MIRABAK SANTOS', active: true },
-  { name: 'ODALIS DE LEON', active: true },
-  { name: 'ESMERALDA EAGLE JIMENEZ', active: true },
-  { name: 'IRMA PINEDA', active: true },
-  { name: 'JORDY VALENZUELA SMITH', active: true },
-  { name: 'TIFFANY GARCIA', active: true },
-  { name: 'JAVIER ADOLFO MOREIRA GARCES', active: true },
-  { name: 'MARIA MATOS', active: true },
-  { name: 'ALEJANDRA RANGEL', active: true },
-  { name: 'CARMEN ESPINAL RODRIGUEZ', active: true },
-  { name: 'CESAR O MOLINA MORALES', active: true },
-  { name: 'ROBELINA JIMENEZ JIMENEZ', active: true },
-  { name: 'RADHAMELIS PEREZ', active: true },
-  { name: 'YENY M SOSA', active: true },
-  { name: 'NICOL ROSARIO DE LEON', active: true },
-  { name: 'SAUDIK P FERREIRA MEDRANO', active: true },
-  { name: 'MANUEL DOLORES VILLA GONZALEZ', active: true },
-  { name: 'EFRAIN RIVERA FIGUEROA', active: true },
-  { name: 'JOSE RAMON MARTE PENA', active: true },
-  { name: 'JERSON JOSUE HEERRERA VASQUEZ', active: true },
-  { name: 'MIGUEL CEDENO AQUINO', active: true },
-  { name: 'BRUNO GABRIEL OLIVO SUNTAXI', active: true },
-  { name: 'MARTIN PEREZ OSVALDO', active: true },
-  { name: 'VICTOR GRACIANO', active: true },
-  { name: 'ALBERTO HERNANDEZ', active: true },
-  { name: 'ROMALDO PAGUAY', active: true },
-  { name: 'ARMANDO RAFAEL SIERRA MORENO', active: true },
-  { name: 'LUIS A DE LA ROSA', active: true },
-  { name: 'RAMON ANTONIO BRETON LARA', active: true },
-  { name: 'JONATHAN HERNANDEZ ANGELES', active: true },
-  { name: 'DARLYN DE JESUS ALMANZAR ANGELES', active: true },
-  { name: 'ALBERTO RODRIGUEZ GONZALEZ', active: true },
-  { name: 'MARVIN MALDONADO', active: true },
-  { name: 'LUIS ARAMIS LOPEZ GARICA', active: true },
-  { name: 'ANGEL RAFAEL NIEVES VASQUEZ', active: true },
-  { name: 'BRYAN JOSE MARTE BATISTA', active: true },
-  { name: 'ELIE FELIZ', active: true },
-  { name: 'ALBA LUZ ROMERO LAINEZ', active: true },
-  { name: 'FILOMENA POMAQUISA', active: true },
-  { name: 'LIGIA ELANA CHILLAGANA', active: true },
-  { name: 'LILIANA PATRICIA TAVAREZ', active: true },
-  { name: 'MIRLANDE NOZIL', active: true },
-  { name: 'ROSSY VALERIO CONTRERAS', active: true },
-  { name: 'PATRICIA HUARI AMAO', active: true },
-  { name: 'SANDRA JANETH OZORIO', active: true },
-  { name: 'VINELLA LAURA', active: true },
-  { name: 'YENNY ROCIO SILVA', active: true },
-  { name: 'SURIEL AMAYA', active: true },
-  { name: 'DOMINGA ALTAGRACIA JAQUEZ', active: true },
-  { name: 'JESSICA TORRES MILLA', active: true },
-  { name: 'MARIA J CONTRERAS RODRIGUEZ', active: true },
-  { name: 'YOLANDA AYALA GARCIA', active: true },
-  { name: 'ANASTACIA SAVEDRA', active: true },
-  { name: 'JENNY MINE', active: true },
-  { name: 'EVA DOMINGUEZ', active: true },
-  { name: 'JOSIANE ST. FLEUR', active: true },
-  { name: 'SARA POLANCO', active: true },
-  { name: 'DELFINA RODRIGUEZ CISNEROS', active: true },
-  { name: 'MARIA ORTEGA O.', active: true },
-  { name: 'MARIELA FRANCO', active: true },
-  { name: 'JESSICA LIZETTE SARAVIA', active: true },
-  { name: 'LUZ ALCANTARA', active: true },
-  { name: 'VIVIANA GABRIUS', active: true },
-  { name: 'MARCIA M. LOPEZ', active: true },
-  { name: 'NOEL OVALLES YNOA', active: true },
-  { name: 'JOHAN STIVEN GUZMAN OVALLES', active: true },
-  { name: 'LOURDES ESTEFANIA ORTIZ', active: true },
-  { name: 'ROCIO BEATRIZ VACACELA ORTIZ', active: true },
-  { name: 'ELIDA VENTURA', active: true },
-  { name: 'LESBY PAOLA DIAZ CASTILLO', active: true },
-  { name: 'VIVICA GARCIA', active: true },
-  { name: 'ALEXANDRO MEJIA', active: true },
-  { name: 'CARLOS GUZMAN', active: true },
-  { name: 'DIEGO FERNANDO ASMEL MATUTE', active: true },
-  { name: 'AUSTRIA ALVAREZ', active: true },
-  { name: 'OLGA RODRIGUEZ', active: true },
-  { name: 'DORIS RAMOS', active: true },
-  { name: 'RENE DAVID TERRON PADILLA', active: true },
-  { name: 'YOAN RODRIGUEZ', active: true },
-  { name: 'ERNSO JACQUES', active: true },
-  { name: 'LOREN FELIZ', active: true },
-  { name: 'EDGAR DIAZ', active: true },
-  { name: 'JESUS DONALDO RAMOS DIAZ', active: true },
-  { name: 'ELVIS MINIER FLETE', active: true },
-  { name: 'LETICIA ESMERALDA (SCANNER)', active: true },
-  { name: 'WILREDO HERRERA PINEDA', active: true },
-  { name: 'JOSE FERNANDO RAMOS', active: true },
-  { name: 'BRIAN PINEDA', active: true },
-  { name: 'STALIN TOAPANTA', active: true },
-  { name: 'CARLOS DIAZ', active: true },
-];
-
-function cleanEmployeeName(value) {
-  return String(value || '').trim().replace(/\s+/g, ' ').toUpperCase();
-}
+const DEFAULT_EMPLOYEES = [];
 
 export default function Employees() {
   const navigate = useNavigate();
@@ -109,6 +13,8 @@ export default function Employees() {
   const [gender, setGender] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncPreview, setSyncPreview] = useState(null);
 
   const totalEmployees = employees.length;
   const enabledEmployees = employees.filter((employee) => employee.active).length;
@@ -129,7 +35,7 @@ export default function Employees() {
       return;
     }
 
-    if (!data || data.length === 0) {
+    if ((!data || data.length === 0) && DEFAULT_EMPLOYEES.length > 0) {
       const { error: insertError } = await supabase
         .from('employees')
         .insert(DEFAULT_EMPLOYEES);
@@ -141,20 +47,7 @@ export default function Employees() {
         return;
       }
 
-      const { data: newData, error: reloadError } = await supabase
-        .from('employees')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (reloadError) {
-        console.error('Reload employees error:', reloadError);
-        alert('Unable to reload employees.');
-        setLoading(false);
-        return;
-      }
-
-      setEmployees(newData || []);
-      setLoading(false);
+      await loadEmployees();
       return;
     }
 
@@ -166,12 +59,152 @@ export default function Employees() {
     loadEmployees();
   }, []);
 
+  const handleExcelUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    setSyncing(true);
+
+    try {
+      const excelEmployees = await readEmployeesFromExcel(file);
+
+      if (excelEmployees.length === 0) {
+        alert('No employee names found in this Excel.');
+        setSyncing(false);
+        return;
+      }
+
+      const { data: currentEmployees, error } = await supabase
+        .from('employees')
+        .select('*');
+
+      if (error) {
+        console.error('Read employees error:', error);
+        alert('Unable to read employees from Supabase.');
+        setSyncing(false);
+        return;
+      }
+
+      const currentList = currentEmployees || [];
+
+      const excelNameSet = new Set(
+        excelEmployees.map((employee) => employee.name)
+      );
+
+      const currentNameSet = new Set(
+        currentList.map((employee) => cleanEmployeeName(employee.name))
+      );
+
+      const toAdd = excelEmployees.filter(
+        (employee) => !currentNameSet.has(employee.name)
+      );
+
+      const toDelete = currentList.filter(
+        (employee) => !excelNameSet.has(cleanEmployeeName(employee.name))
+      );
+
+      const toUpdateGender = currentList.filter((employee) => {
+        const cleanName = cleanEmployeeName(employee.name);
+        const match = excelEmployees.find((item) => item.name === cleanName);
+
+        return match && match.gender && !employee.gender;
+      });
+
+      setSyncPreview({
+        fileName: file.name,
+        excelEmployees,
+        toAdd,
+        toDelete,
+        toUpdateGender,
+      });
+    } catch (error) {
+      console.error('Excel read error:', error);
+      alert('Unable to read Excel file.');
+    }
+
+    setSyncing(false);
+  };
+
+  const confirmExcelSync = async () => {
+    if (!syncPreview) return;
+
+    const confirmSync = confirm(
+      `Confirm Excel Sync?\n\n` +
+      `File: ${syncPreview.fileName}\n` +
+      `Add: ${syncPreview.toAdd.length}\n` +
+      `Delete: ${syncPreview.toDelete.length}\n` +
+      `Gender update: ${syncPreview.toUpdateGender.length}\n\n` +
+      `Continue?`
+    );
+
+    if (!confirmSync) return;
+
+    setSyncing(true);
+
+    if (syncPreview.toAdd.length > 0) {
+      const { error } = await supabase.from('employees').insert(
+        syncPreview.toAdd.map((employee) => ({
+          name: employee.name,
+          active: true,
+          gender: employee.gender || null,
+        }))
+      );
+
+      if (error) {
+        console.error('Insert sync error:', error);
+        alert('Unable to add employees.');
+        setSyncing(false);
+        return;
+      }
+    }
+
+    if (syncPreview.toDelete.length > 0) {
+      const ids = syncPreview.toDelete.map((employee) => employee.id);
+
+      const { error } = await supabase
+        .from('employees')
+        .delete()
+        .in('id', ids);
+
+      if (error) {
+        console.error('Delete sync error:', error);
+        alert('Unable to delete employees.');
+        setSyncing(false);
+        return;
+      }
+    }
+
+    for (const employee of syncPreview.toUpdateGender) {
+      const cleanName = cleanEmployeeName(employee.name);
+      const match = syncPreview.excelEmployees.find(
+        (item) => item.name === cleanName
+      );
+
+      if (match?.gender) {
+        await supabase
+          .from('employees')
+          .update({ gender: match.gender })
+          .eq('id', employee.id);
+      }
+    }
+
+    setSyncPreview(null);
+    await loadEmployees();
+    setSyncing(false);
+
+    alert('Employee sync complete.');
+  };
+
   const addEmployee = async () => {
     const cleanName = cleanEmployeeName(name);
 
     if (!cleanName) return;
 
-    const exists = employees.some((employee) => employee.name === cleanName);
+    const exists = employees.some(
+      (employee) => cleanEmployeeName(employee.name) === cleanName
+    );
 
     if (exists) {
       alert('This employee already exists.');
@@ -228,7 +261,6 @@ export default function Employees() {
     await loadEmployees();
   };
 
-
   const updateEmployeeGender = async (id, nextGender) => {
     const { error } = await supabase
       .from('employees')
@@ -249,15 +281,7 @@ export default function Employees() {
   );
 
   return (
-    <div
-      style={{
-        backgroundColor: '#0f172a',
-        color: '#f8fafc',
-        minHeight: '100vh',
-        fontFamily: 'system-ui, sans-serif',
-        padding: '40px',
-      }}
-    >
+    <div style={pageStyle}>
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
         <button onClick={() => navigate('/home')} style={backButtonStyle}>
           ← Back to Dashboard
@@ -285,7 +309,93 @@ export default function Employees() {
               </span>
             </div>
           </div>
+
+          <div>
+            <input
+              id="employee-excel-upload"
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleExcelUpload}
+              style={{ display: 'none' }}
+            />
+
+            <button
+              onClick={() => document.getElementById('employee-excel-upload')?.click()}
+              disabled={syncing}
+              style={{
+                ...syncButtonStyle,
+                opacity: syncing ? 0.6 : 1,
+                cursor: syncing ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {syncing ? 'Reading Excel...' : 'Upload & Sync Excel'}
+            </button>
+          </div>
         </div>
+
+        {syncPreview && (
+          <div style={previewCardStyle}>
+            <div style={previewHeaderStyle}>
+              <div>
+                <h2 style={{ margin: 0, color: '#f8fafc' }}>Excel Sync Preview</h2>
+                <p style={{ margin: '6px 0 0', color: '#94a3b8' }}>
+                  File: {syncPreview.fileName}
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={() => setSyncPreview(null)} style={cancelButtonStyle}>
+                  Cancel
+                </button>
+
+                <button onClick={confirmExcelSync} style={confirmButtonStyle}>
+                  Confirm Sync
+                </button>
+              </div>
+            </div>
+
+            <div style={previewGridStyle}>
+              <div style={previewBoxStyle}>
+                <strong style={{ color: '#86efac' }}>
+                  Add: {syncPreview.toAdd.length}
+                </strong>
+
+                <div style={previewListStyle}>
+                  {syncPreview.toAdd.slice(0, 8).map((item) => (
+                    <div key={item.name}>{item.name}</div>
+                  ))}
+                  {syncPreview.toAdd.length > 8 && <div>...</div>}
+                </div>
+              </div>
+
+              <div style={previewBoxStyle}>
+                <strong style={{ color: '#fca5a5' }}>
+                  Delete: {syncPreview.toDelete.length}
+                </strong>
+
+                <div style={previewListStyle}>
+                  {syncPreview.toDelete.slice(0, 8).map((item) => (
+                    <div key={item.id}>{item.name}</div>
+                  ))}
+                  {syncPreview.toDelete.length > 8 && <div>...</div>}
+                </div>
+              </div>
+
+              <div style={previewBoxStyle}>
+                <strong style={{ color: '#38bdf8' }}>
+                  Gender Update: {syncPreview.toUpdateGender.length}
+                </strong>
+
+                <div style={previewListStyle}>
+                  {syncPreview.toUpdateGender.slice(0, 8).map((item) => (
+                    <div key={item.id}>{item.name}</div>
+                  ))}
+                  {syncPreview.toUpdateGender.length > 8 && <div>...</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div style={cardStyle}>
           <label style={labelStyle}>Employee Name</label>
@@ -360,13 +470,11 @@ export default function Employees() {
                   <tr key={employee.id}>
                     <td style={tdStyle}>{index + 1}</td>
 
-                    <td
-                      style={{
-                        ...tdStyle,
-                        fontWeight: '800',
-                        opacity: employee.active ? 1 : 0.45,
-                      }}
-                    >
+                    <td style={{
+                      ...tdStyle,
+                      fontWeight: '800',
+                      opacity: employee.active ? 1 : 0.45,
+                    }}>
                       {employee.name}
                     </td>
 
@@ -383,38 +491,32 @@ export default function Employees() {
                     </td>
 
                     <td style={tdStyle}>
-                      <span
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: '999px',
-                          fontWeight: '800',
-                          fontSize: '0.75rem',
-                          backgroundColor: employee.active
-                            ? 'rgba(34, 197, 94, 0.12)'
-                            : 'rgba(239, 68, 68, 0.12)',
-                          color: employee.active ? '#86efac' : '#fca5a5',
-                          border: employee.active
-                            ? '1px solid rgba(34, 197, 94, 0.35)'
-                            : '1px solid rgba(239, 68, 68, 0.35)',
-                        }}
-                      >
+                      <span style={{
+                        padding: '5px 10px',
+                        borderRadius: '999px',
+                        fontWeight: '800',
+                        fontSize: '0.75rem',
+                        backgroundColor: employee.active
+                          ? 'rgba(34, 197, 94, 0.12)'
+                          : 'rgba(239, 68, 68, 0.12)',
+                        color: employee.active ? '#86efac' : '#fca5a5',
+                        border: employee.active
+                          ? '1px solid rgba(34, 197, 94, 0.35)'
+                          : '1px solid rgba(239, 68, 68, 0.35)',
+                      }}>
                         {employee.active ? 'Enable' : 'Disable'}
                       </span>
                     </td>
 
                     <td style={tdStyle}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: '8px',
-                          justifyContent: 'center',
-                          flexWrap: 'wrap',
-                        }}
-                      >
+                      <div style={{
+                        display: 'flex',
+                        gap: '8px',
+                        justifyContent: 'center',
+                        flexWrap: 'wrap',
+                      }}>
                         <button
-                          onClick={() =>
-                            toggleEmployee(employee.id, employee.active)
-                          }
+                          onClick={() => toggleEmployee(employee.id, employee.active)}
                           style={{
                             ...smallButtonStyle,
                             color: employee.active ? '#fbbf24' : '#86efac',
@@ -447,6 +549,14 @@ export default function Employees() {
   );
 }
 
+const pageStyle = {
+  backgroundColor: '#0f172a',
+  color: '#f8fafc',
+  minHeight: '100vh',
+  fontFamily: 'system-ui, sans-serif',
+  padding: '40px',
+};
+
 const backButtonStyle = {
   backgroundColor: '#1e293b',
   color: '#fff',
@@ -465,6 +575,7 @@ const headerStyle = {
   marginBottom: '24px',
   borderBottom: '1px solid #334155',
   paddingBottom: '20px',
+  gap: '16px',
 };
 
 const titleStyle = {
@@ -493,6 +604,73 @@ const counterItemStyle = {
   borderRadius: '999px',
   fontSize: '0.78rem',
   fontWeight: '800',
+};
+
+const syncButtonStyle = {
+  backgroundColor: '#38bdf8',
+  color: '#0f172a',
+  border: 'none',
+  borderRadius: '8px',
+  padding: '12px 16px',
+  fontWeight: '900',
+};
+
+const previewCardStyle = {
+  backgroundColor: '#1e293b',
+  border: '1px solid #38bdf8',
+  borderRadius: '14px',
+  padding: '18px',
+  marginBottom: '18px',
+};
+
+const previewHeaderStyle = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: '14px',
+  marginBottom: '16px',
+};
+
+const previewGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  gap: '12px',
+};
+
+const previewBoxStyle = {
+  backgroundColor: '#0f172a',
+  border: '1px solid #334155',
+  borderRadius: '10px',
+  padding: '12px',
+};
+
+const previewListStyle = {
+  color: '#cbd5e1',
+  fontSize: '0.78rem',
+  marginTop: '8px',
+  lineHeight: 1.6,
+  maxHeight: '150px',
+  overflow: 'auto',
+};
+
+const cancelButtonStyle = {
+  backgroundColor: '#334155',
+  color: '#f8fafc',
+  border: 'none',
+  borderRadius: '8px',
+  padding: '10px 12px',
+  fontWeight: '900',
+  cursor: 'pointer',
+};
+
+const confirmButtonStyle = {
+  backgroundColor: '#22c55e',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '8px',
+  padding: '10px 12px',
+  fontWeight: '900',
+  cursor: 'pointer',
 };
 
 const cardStyle = {
@@ -587,7 +765,6 @@ const smallButtonStyle = {
   fontWeight: '900',
   cursor: 'pointer',
 };
-
 
 const genderSelectStyle = {
   backgroundColor: '#0f172a',
