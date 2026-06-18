@@ -5,7 +5,7 @@ import {
   Users, 
   Newspaper,
   Database,
-  Package
+  Boxes,
 } from 'lucide-react';
 
 export default function Home() {
@@ -93,12 +93,12 @@ export default function Home() {
     },
 
     {
-    id: 11,
-    title: 'SUPPLIES',
-    desc: 'Weekly supplies stock and Word report.',
-    icon: <Package size={40} />,
-    path: '/supplies'
-    },
+      id: "supplies",
+      title: "SUPPLIES",
+      desc: "Manage weekly supplies orders.",
+      icon: <Boxes size={40} />,
+      path: "/supplies",
+    }
   ];
 
   return (

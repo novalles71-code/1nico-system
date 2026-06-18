@@ -13,6 +13,10 @@ import Attendance from './views/Attendance';
 import DeviceAccess from './views/DeviceAccess';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
 import Supplies from './views/Supplies';
+import SuppliesDashboard from './pages/SuppliesDashboard';
+import SuppliesMaster from './pages/SuppliesMaster';
+import SuppliesBuilding from './pages/SuppliesBuilding';
+import ProtectedSuppliesDeviceRoute from "./components/ProtectedSuppliesDeviceRoute";
 
 function App() {
   return (
@@ -24,6 +28,37 @@ function App() {
         <Route path="/system-2" element={<System2 />} />
         <Route path="/system-3" element={<System3 />} />
         <Route path="/system-4" element={<System4 />} />
+
+        <Route path="/supplies-dashboard" element={<ProtectedAdminRoute><SuppliesDashboard /> </ProtectedAdminRoute>}/>
+        <Route path="/supplies-master" element={<ProtectedAdminRoute><SuppliesMaster /></ProtectedAdminRoute>}/>
+        <Route
+  path="/supplies-building-6"
+  element={
+    <ProtectedSuppliesDeviceRoute building="BUILDING 6">
+      <SuppliesBuilding building="BUILDING 6" />
+    </ProtectedSuppliesDeviceRoute>
+  }
+/>
+
+<Route
+  path="/supplies-building-8"
+  element={
+    <ProtectedSuppliesDeviceRoute building="BUILDING 8">
+      <SuppliesBuilding building="BUILDING 8" />
+    </ProtectedSuppliesDeviceRoute>
+  }
+/>
+
+<Route
+  path="/supplies-building-9"
+  element={
+    <ProtectedSuppliesDeviceRoute building="BUILDING 9">
+      <SuppliesBuilding building="BUILDING 9" />
+    </ProtectedSuppliesDeviceRoute>
+  }
+/>
+
+
 
         <Route
   path="/home"
