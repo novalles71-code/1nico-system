@@ -31,32 +31,9 @@ function App() {
 
         <Route path="/supplies-dashboard" element={<ProtectedAdminRoute><SuppliesDashboard /> </ProtectedAdminRoute>}/>
         <Route path="/supplies-master" element={<ProtectedAdminRoute><SuppliesMaster /></ProtectedAdminRoute>}/>
-        <Route
-  path="/supplies-building-6"
-  element={
-    <ProtectedSuppliesDeviceRoute building="BUILDING 6">
-      <SuppliesBuilding building="BUILDING 6" />
-    </ProtectedSuppliesDeviceRoute>
-  }
-/>
-
-<Route
-  path="/supplies-building-8"
-  element={
-    <ProtectedSuppliesDeviceRoute building="BUILDING 8">
-      <SuppliesBuilding building="BUILDING 8" />
-    </ProtectedSuppliesDeviceRoute>
-  }
-/>
-
-<Route
-  path="/supplies-building-9"
-  element={
-    <ProtectedSuppliesDeviceRoute building="BUILDING 9">
-      <SuppliesBuilding building="BUILDING 9" />
-    </ProtectedSuppliesDeviceRoute>
-  }
-/>
+        <Route path="/supplies-building-6" element={<ProtectedSuppliesDeviceRoute building="B6"><SuppliesBuilding building="BUILDING 6" /></ProtectedSuppliesDeviceRoute>}/>
+        <Route path="/supplies-building-8" element={<ProtectedSuppliesDeviceRoute building="B8"><SuppliesBuilding building="BUILDING 8" /></ProtectedSuppliesDeviceRoute>}/>
+        <Route path="/supplies-building-9" element={<ProtectedSuppliesDeviceRoute building="B9"><SuppliesBuilding building="BUILDING 9" /></ProtectedSuppliesDeviceRoute>}/>
 
 
 
@@ -134,6 +111,7 @@ function App() {
 />
 
       </Routes>
+      
     </Router>
   );
 }

@@ -1,28 +1,59 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
+const BUILDING_SYSTEM_NAMES = {
+  "B6": "B6",
+  "B8": "B8",
+  "B9": "B9",
+};
+
 export default function ProtectedSuppliesDeviceRoute({ building, children }) {
   const [checking, setChecking] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [token, setToken] = useState("");
 
-  const storageKey = `supplies_device_token_${building}`;
+  const systemName = BUILDING_SYSTEM_NAMES[building];
+  const storageKey = `supplies_device_token_${systemName}`;
 
   useEffect(() => {
-    checkSavedToken();
+    checkSavedDevice();
   }, [building]);
 
-  async function checkSavedToken() {
-    const savedToken = localStorage.getItem(storageKey);
+  function getDeviceFingerprint() {
+    let deviceId = localStorage.getItem("device_fingerprint");
 
-    if (!savedToken) {
+    if (!deviceId) {
+      deviceId = crypto.randomUUID();
+      localStorage.setItem("device_fingerprint", deviceId);
+    }
+
+    return deviceId;
+  }
+
+  async function checkSavedDevice() {
+    const savedDeviceId = localStorage.getItem(storageKey);
+
+    if (!savedDeviceId) {
       setChecking(false);
       return;
     }
 
-    const ok = await validateToken(savedToken);
+    const { data, error } = await supabase
+      .from("device_authorizations")
+      .select("*")
+      .eq("device_token", savedDeviceId)
+      .eq("system_name", systemName)
+      .eq("is_active", true)
+      .maybeSingle();
 
-    if (ok) {
+    if (error) {
+      console.error(error);
+      localStorage.removeItem(storageKey);
+      setChecking(false);
+      return;
+    }
+
+    if (data) {
       setAuthorized(true);
     } else {
       localStorage.removeItem(storageKey);
@@ -31,12 +62,14 @@ export default function ProtectedSuppliesDeviceRoute({ building, children }) {
     setChecking(false);
   }
 
-  async function validateToken(value) {
-    const { data, error } = await supabase
+  async function validateFirstToken(value) {
+    const cleanToken = value.trim();
+
+    const { data: device, error } = await supabase
       .from("device_authorizations")
       .select("*")
-      .eq("device_token", value.trim())
-      .eq("system_name", building)
+      .eq("device_token", cleanToken)
+      .eq("system_name", systemName)
       .eq("is_active", true)
       .maybeSingle();
 
@@ -45,7 +78,25 @@ export default function ProtectedSuppliesDeviceRoute({ building, children }) {
       return false;
     }
 
-    return !!data;
+    if (!device) return false;
+
+    const deviceId = getDeviceFingerprint();
+
+    const { error: updateError } = await supabase
+      .from("device_authorizations")
+      .update({
+        device_token: deviceId,
+      })
+      .eq("id", device.id);
+
+    if (updateError) {
+      console.error(updateError);
+      return false;
+    }
+
+    localStorage.setItem(storageKey, deviceId);
+
+    return true;
   }
 
   async function submitToken(e) {
@@ -56,7 +107,7 @@ export default function ProtectedSuppliesDeviceRoute({ building, children }) {
 
     setChecking(true);
 
-    const ok = await validateToken(cleanToken);
+    const ok = await validateFirstToken(cleanToken);
 
     if (!ok) {
       alert("Invalid or inactive device token.");
@@ -64,7 +115,6 @@ export default function ProtectedSuppliesDeviceRoute({ building, children }) {
       return;
     }
 
-    localStorage.setItem(storageKey, cleanToken);
     setAuthorized(true);
     setChecking(false);
   }
@@ -86,7 +136,9 @@ export default function ProtectedSuppliesDeviceRoute({ building, children }) {
           <div style={styles.logo}>1NICO</div>
 
           <h1 style={styles.title}>{building}</h1>
-          <p style={styles.text}>This device must be authorized to access this supplies page.</p>
+          <p style={styles.text}>
+            This device must be authorized to access this supplies page.
+          </p>
 
           <input
             style={styles.input}
