@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { UserCheck, BarChart3, Coffee } from 'lucide-react';
+import { UserCheck, BarChart3, Coffee, PackageOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import PlasticInventorySingleLine from '../components/PlasticInventorySingleLine';
 
 const SYSTEM_NAME = 'system2';
 const SYSTEM_LABEL = 'System 2';
@@ -183,12 +184,16 @@ export default function System2() {
     e.preventDefault();
 
     if (shift === 'DAYS') {
-      document.getElementById(`input-single-${SYSTEM_CODE}-NIGHTS-${dayIndex}`)?.focus();
+      document
+        .getElementById(`input-single-${SYSTEM_CODE}-NIGHTS-${dayIndex}`)
+        ?.focus();
     } else {
       const nextIndex = dayIndex + 1;
 
       if (nextIndex < 7) {
-        document.getElementById(`input-single-${SYSTEM_CODE}-DAYS-${nextIndex}`)?.focus();
+        document
+          .getElementById(`input-single-${SYSTEM_CODE}-DAYS-${nextIndex}`)
+          ?.focus();
       }
     }
   };
@@ -233,48 +238,48 @@ export default function System2() {
 
   // BREAKS
   const [config, setConfig] = useState({
-  system1: 1,
-  system2: 1,
-  system3: 1,
-  system4: 1,
-});
+    system1: 1,
+    system2: 1,
+    system3: 1,
+    system4: 1,
+  });
 
-useEffect(() => {
-  const loadBreakConfig = async () => {
-    const { data, error } = await supabase
-      .from('break_config')
-      .select('*')
-      .eq('id', 1)
-      .single();
+  useEffect(() => {
+    const loadBreakConfig = async () => {
+      const { data, error } = await supabase
+        .from('break_config')
+        .select('*')
+        .eq('id', 1)
+        .single();
 
-    if (error) {
-      console.error('Load break config error:', error);
-      return;
-    }
+      if (error) {
+        console.error('Load break config error:', error);
+        return;
+      }
 
-    setConfig({
-      system1: data.system1,
-      system2: data.system2,
-      system3: data.system3,
-      system4: data.system4,
-    });
-  };
+      setConfig({
+        system1: data.system1,
+        system2: data.system2,
+        system3: data.system3,
+        system4: data.system4,
+      });
+    };
 
-  loadBreakConfig();
+    loadBreakConfig();
 
-  const channel = supabase
-    .channel(`${SYSTEM_NAME}-break-config`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'break_config' },
-      loadBreakConfig
-    )
-    .subscribe();
+    const channel = supabase
+      .channel(`${SYSTEM_NAME}-break-config`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'break_config' },
+        loadBreakConfig
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const currentBreakOption = config.system2 || 1;
 
@@ -549,9 +554,7 @@ useEffect(() => {
 
   const handleAttendanceTimeChange = (id, field, value) => {
     setAttendanceRows((prev) =>
-      prev.map((row) =>
-        row.id === id ? { ...row, [field]: value } : row
-      )
+      prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
     );
   };
 
@@ -567,9 +570,7 @@ useEffect(() => {
 
   const handleAttendanceRoleChange = (id, value) => {
     setAttendanceRows((prev) =>
-      prev.map((row) =>
-        row.id === id ? { ...row, role: value } : row
-      )
+      prev.map((row) => (row.id === id ? { ...row, role: value } : row))
     );
   };
 
@@ -651,6 +652,11 @@ useEffect(() => {
       desc: 'View current active break schedules assigned remotely.',
       icon: <Coffee size={24} />,
     },
+    {
+      title: 'Plastic Inventory',
+      desc: 'Calculate plastic physical count, used qty, and rejects.',
+      icon: <PackageOpen size={24} />,
+    },
   ];
 
   const tabs = [
@@ -658,6 +664,7 @@ useEffect(() => {
     'Attendance',
     'Run Total',
     'Breaks',
+    'Plastic Inventory',
   ];
 
   if (authLoading) {
@@ -742,7 +749,8 @@ useEffect(() => {
                 lineHeight: '1.5',
               }}
             >
-              This PC is not authorized yet. Enter the System 2 PIN once to lock this workstation to this device.
+              This PC is not authorized yet. Enter the System 2 PIN once to lock
+              this workstation to this device.
             </p>
           </div>
 
@@ -980,6 +988,10 @@ useEffect(() => {
             </div>
           )}
 
+          {activeTab === 'Plastic Inventory' && (
+            <PlasticInventorySingleLine system="system2" title="SYSTEM 2" />
+          )}
+
           {activeTab === 'Attendance' && (
             <div
               style={{
@@ -998,12 +1010,27 @@ useEffect(() => {
                   backgroundColor: '#f8fafc',
                 }}
               >
-                <h3 style={{ margin: 0, fontSize: '1.45rem', fontWeight: '900', color: '#1e293b' }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: '1.45rem',
+                    fontWeight: '900',
+                    color: '#1e293b',
+                  }}
+                >
                   Attendance Board
                 </h3>
 
-                <p style={{ margin: '6px 0 0 0', color: '#64748b', fontSize: '0.9rem', fontWeight: '500' }}>
-                  Search employee, select name, enter Time In, Time Out, Role, then press Enter on Add.
+                <p
+                  style={{
+                    margin: '6px 0 0 0',
+                    color: '#64748b',
+                    fontSize: '0.9rem',
+                    fontWeight: '500',
+                  }}
+                >
+                  Search employee, select name, enter Time In, Time Out, Role,
+                  then press Enter on Add.
                 </p>
               </div>
 
@@ -1061,13 +1088,18 @@ useEffect(() => {
                         {filteredEmployees.map((emp, index) => (
                           <div
                             key={emp.id}
-                            onMouseEnter={() => setHighlightedEmployeeIndex(index)}
+                            onMouseEnter={() =>
+                              setHighlightedEmployeeIndex(index)
+                            }
                             onClick={() => selectFilteredEmployee(emp)}
                             style={{
                               padding: '10px',
                               cursor: 'pointer',
                               borderBottom: '1px solid #f1f5f9',
-                              backgroundColor: index === highlightedEmployeeIndex ? '#dbeafe' : '#fff',
+                              backgroundColor:
+                                index === highlightedEmployeeIndex
+                                  ? '#dbeafe'
+                                  : '#fff',
                               fontWeight: '700',
                               color: '#334155',
                             }}
@@ -1086,8 +1118,14 @@ useEffect(() => {
                     maxLength={5}
                     value={tempTimeIn}
                     onChange={(e) => setTempTimeIn(e.target.value)}
-                    onBlur={() => setTempTimeIn((prev) => normalizeAttendanceTimeValue(prev))}
-                    onKeyDown={(e) => moveToNextAttendanceField(e, 'attendance-time-out')}
+                    onBlur={() =>
+                      setTempTimeIn((prev) =>
+                        normalizeAttendanceTimeValue(prev)
+                      )
+                    }
+                    onKeyDown={(e) =>
+                      moveToNextAttendanceField(e, 'attendance-time-out')
+                    }
                     style={{
                       padding: '10px',
                       border: '1px solid #cbd5e1',
@@ -1106,8 +1144,14 @@ useEffect(() => {
                     maxLength={5}
                     value={tempTimeOut}
                     onChange={(e) => setTempTimeOut(e.target.value)}
-                    onBlur={() => setTempTimeOut((prev) => normalizeAttendanceTimeValue(prev))}
-                    onKeyDown={(e) => moveToNextAttendanceField(e, 'attendance-role')}
+                    onBlur={() =>
+                      setTempTimeOut((prev) =>
+                        normalizeAttendanceTimeValue(prev)
+                      )
+                    }
+                    onKeyDown={(e) =>
+                      moveToNextAttendanceField(e, 'attendance-role')
+                    }
                     style={{
                       padding: '10px',
                       border: '1px solid #cbd5e1',
@@ -1123,7 +1167,9 @@ useEffect(() => {
                     id="attendance-role"
                     value={tempRole}
                     onChange={(e) => setTempRole(e.target.value)}
-                    onKeyDown={(e) => moveToNextAttendanceField(e, 'attendance-add-button')}
+                    onKeyDown={(e) =>
+                      moveToNextAttendanceField(e, 'attendance-add-button')
+                    }
                     style={{
                       padding: '10px',
                       border: '1px solid #cbd5e1',
@@ -1211,7 +1257,9 @@ useEffect(() => {
                                     e.target.value
                                   )
                                 }
-                                onBlur={() => normalizeAttendanceRowTime(row.id, 'timeIn')}
+                                onBlur={() =>
+                                  normalizeAttendanceRowTime(row.id, 'timeIn')
+                                }
                                 style={attendanceTimeInput}
                               />
                             </td>
@@ -1227,7 +1275,9 @@ useEffect(() => {
                                     e.target.value
                                   )
                                 }
-                                onBlur={() => normalizeAttendanceRowTime(row.id, 'timeOut')}
+                                onBlur={() =>
+                                  normalizeAttendanceRowTime(row.id, 'timeOut')
+                                }
                                 style={attendanceTimeInput}
                               />
                             </td>
@@ -1235,7 +1285,12 @@ useEffect(() => {
                             <td style={attendanceTdInput}>
                               <select
                                 value={row.role || SYSTEM_CODE}
-                                onChange={(e) => handleAttendanceRoleChange(row.id, e.target.value)}
+                                onChange={(e) =>
+                                  handleAttendanceRoleChange(
+                                    row.id,
+                                    e.target.value
+                                  )
+                                }
                                 style={{
                                   ...attendanceTimeInput,
                                   fontWeight: '800',
@@ -1288,7 +1343,8 @@ useEffect(() => {
                       fontWeight: '500',
                     }}
                   >
-                    Names are loaded from Supabase. Role options: QC, {SYSTEM_CODE}, OP.
+                    Names are loaded from Supabase. Role options: QC,{' '}
+                    {SYSTEM_CODE}, OP.
                   </div>
 
                   <button
@@ -1318,27 +1374,73 @@ useEffect(() => {
                 input[type=number] { -moz-appearance: textfield; }
               `}</style>
 
-              <div style={{ border: '1px solid #cbd5e1', padding: '16px', borderRadius: '6px', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#374151', fontWeight: '700' }}>
+              <div
+                style={{
+                  border: '1px solid #cbd5e1',
+                  padding: '16px',
+                  borderRadius: '6px',
+                  backgroundColor: '#fff',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                }}
+              >
+                <h3
+                  style={{
+                    margin: '0 0 12px 0',
+                    fontSize: '1rem',
+                    color: '#374151',
+                    fontWeight: '700',
+                  }}
+                >
                   Production Tracking — System 2
                 </h3>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '15px', alignItems: 'center' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '15px',
+                    backgroundColor: '#f8fafc',
+                    padding: '12px',
+                    borderRadius: '6px',
+                    border: '1px solid #e2e8f0',
+                    marginBottom: '15px',
+                    alignItems: 'center',
+                  }}
+                >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '0.78rem', fontWeight: '700', color: '#475569' }}>
+                    <label
+                      style={{
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        color: '#475569',
+                      }}
+                    >
                       Monday Date:
                     </label>
 
                     <input
                       type="date"
                       value={tableData.mondayDate}
-                      onChange={(e) => handleFieldChange('mondayDate', e.target.value)}
-                      style={{ border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem' }}
+                      onChange={(e) =>
+                        handleFieldChange('mondayDate', e.target.value)
+                      }
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.85rem',
+                      }}
                     />
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '0.78rem', fontWeight: '700', color: '#475569' }}>
+                    <label
+                      style={{
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        color: '#475569',
+                      }}
+                    >
                       Weekly Target:
                     </label>
 
@@ -1346,105 +1448,318 @@ useEffect(() => {
                       type="number"
                       placeholder="Target amount"
                       value={tableData.weeklyTarget}
-                      onChange={(e) => handleFieldChange('weeklyTarget', e.target.value)}
+                      onChange={(e) =>
+                        handleFieldChange('weeklyTarget', e.target.value)
+                      }
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') e.currentTarget.blur();
                       }}
-                      style={{ border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem', width: '130px' }}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.85rem',
+                        width: '130px',
+                      }}
                     />
                   </div>
                 </div>
 
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'Arial, sans-serif', fontSize: '11px', minWidth: '950px' }}>
+                  <table
+                    style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      fontFamily: 'Arial, sans-serif',
+                      fontSize: '11px',
+                      minWidth: '950px',
+                    }}
+                  >
                     <thead>
                       <tr style={{ backgroundColor: '#f1f3f4', color: '#000' }}>
-                        <th style={{ border: '1px solid #cbd5e1', padding: '10px', textAlign: 'center', width: '220px' }}>Product Specs</th>
-                        <th style={{ border: '1px solid #cbd5e1', padding: '10px', textAlign: 'center', width: '100px' }}>Weekly Target</th>
-                        <th style={{ border: '1px solid #cbd5e1', padding: '10px', textAlign: 'center', width: '80px' }}>Shifts</th>
+                        <th
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '10px',
+                            textAlign: 'center',
+                            width: '220px',
+                          }}
+                        >
+                          Product Specs
+                        </th>
+                        <th
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '10px',
+                            textAlign: 'center',
+                            width: '100px',
+                          }}
+                        >
+                          Weekly Target
+                        </th>
+                        <th
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '10px',
+                            textAlign: 'center',
+                            width: '80px',
+                          }}
+                        >
+                          Shifts
+                        </th>
 
                         {calculatedDaysDates.map((dateStr, idx) => (
-                          <th key={idx} style={{ border: '1px solid #cbd5e1', padding: '10px', textAlign: 'center', fontWeight: '700', width: '95px' }}>
+                          <th
+                            key={idx}
+                            style={{
+                              border: '1px solid #cbd5e1',
+                              padding: '10px',
+                              textAlign: 'center',
+                              fontWeight: '700',
+                              width: '95px',
+                            }}
+                          >
                             {dateStr}
                           </th>
                         ))}
 
-                        <th style={{ border: '1px solid #cbd5e1', padding: '10px', textAlign: 'center', width: '110px', fontWeight: 'bold' }}>Total Produced</th>
-                        <th style={{ border: '1px solid #cbd5e1', padding: '10px', textAlign: 'center', width: '110px', fontWeight: 'bold' }}>Total Remaining</th>
+                        <th
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '10px',
+                            textAlign: 'center',
+                            width: '110px',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          Total Produced
+                        </th>
+                        <th
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '10px',
+                            textAlign: 'center',
+                            width: '110px',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          Total Remaining
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody>
                       <tr style={{ backgroundColor: currentBgColor }}>
-                        <td style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#fff', textAlign: 'center' }}>
+                        <td
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '6px',
+                            backgroundColor: '#fff',
+                            textAlign: 'center',
+                          }}
+                        >
                           <input
                             type="text"
                             value={tableData.productName}
-                            onChange={(e) => handleFieldChange('productName', e.target.value.toUpperCase())}
-                            style={{ border: 'none', padding: '4px', fontWeight: 'bold', fontSize: '12px', textAlign: 'center', width: '95%', outline: 'none', textTransform: 'uppercase', backgroundColor: 'transparent' }}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                'productName',
+                                e.target.value.toUpperCase()
+                              )
+                            }
+                            style={{
+                              border: 'none',
+                              padding: '4px',
+                              fontWeight: 'bold',
+                              fontSize: '12px',
+                              textAlign: 'center',
+                              width: '95%',
+                              outline: 'none',
+                              textTransform: 'uppercase',
+                              backgroundColor: 'transparent',
+                            }}
                             placeholder="PRODUCT NAME"
                           />
                         </td>
 
-                        <td rowSpan={2} style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'center', fontWeight: '600', fontSize: '13px', color: '#000', backgroundColor: '#f8fafc' }}>
+                        <td
+                          rowSpan={2}
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '8px',
+                            textAlign: 'center',
+                            fontWeight: '600',
+                            fontSize: '13px',
+                            color: '#000',
+                            backgroundColor: '#f8fafc',
+                          }}
+                        >
                           {tableData.weeklyTarget || '0'}
                         </td>
 
-                        <td style={{ border: '1px solid #cbd5e1', padding: '8px', fontWeight: 'bold', backgroundColor: 'rgba(0,0,0,0.03)', color: '#000', textAlign: 'center' }}>
+                        <td
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '8px',
+                            fontWeight: 'bold',
+                            backgroundColor: 'rgba(0,0,0,0.03)',
+                            color: '#000',
+                            textAlign: 'center',
+                          }}
+                        >
                           DAYS
                         </td>
 
                         {tableData.productionValues.DAYS.map((val, idx) => (
-                          <td key={idx} style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#fff' }}>
+                          <td
+                            key={idx}
+                            style={{
+                              border: '1px solid #cbd5e1',
+                              padding: '4px',
+                              backgroundColor: '#fff',
+                            }}
+                          >
                             <input
                               id={`input-single-${SYSTEM_CODE}-DAYS-${idx}`}
                               type="number"
                               value={val}
-                              onChange={(e) => handleCellChange('DAYS', idx, e.target.value)}
+                              onChange={(e) =>
+                                handleCellChange('DAYS', idx, e.target.value)
+                              }
                               onKeyDown={(e) => handleKeyDown(e, 'DAYS', idx)}
-                              style={{ width: '100%', border: 'none', textAlign: 'center', padding: '4px 0', fontSize: '12px', outline: 'none', backgroundColor: 'transparent' }}
+                              style={{
+                                width: '100%',
+                                border: 'none',
+                                textAlign: 'center',
+                                padding: '4px 0',
+                                fontSize: '12px',
+                                outline: 'none',
+                                backgroundColor: 'transparent',
+                              }}
                               placeholder="0"
                             />
                           </td>
                         ))}
 
-                        <td rowSpan={2} style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'center', fontSize: '15px', fontWeight: '900', color: '#000' }}>
+                        <td
+                          rowSpan={2}
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '8px',
+                            textAlign: 'center',
+                            fontSize: '15px',
+                            fontWeight: '900',
+                            color: '#000',
+                          }}
+                        >
                           {totalProduced}
                         </td>
 
-                        <td rowSpan={2} style={{ border: '1px solid #cbd5e1', padding: '8px', textAlign: 'center', fontSize: '15px', fontWeight: '900', color: '#000' }}>
+                        <td
+                          rowSpan={2}
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '8px',
+                            textAlign: 'center',
+                            fontSize: '15px',
+                            fontWeight: '900',
+                            color: '#000',
+                          }}
+                        >
                           {totalRemaining}
                         </td>
                       </tr>
 
                       <tr style={{ backgroundColor: currentBgColor }}>
-                        <td style={{ border: '1px solid #cbd5e1', padding: '6px', backgroundColor: '#fff', textAlign: 'center' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                            <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 'bold' }}>#</span>
+                        <td
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '6px',
+                            backgroundColor: '#fff',
+                            textAlign: 'center',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                color: '#6b7280',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              #
+                            </span>
 
                             <input
                               type="text"
                               value={tableData.productNumber}
-                              onChange={(e) => handleFieldChange('productNumber', e.target.value)}
-                              style={{ border: 'none', padding: '4px', fontSize: '12px', textAlign: 'center', width: '80%', outline: 'none', fontWeight: '600', backgroundColor: 'transparent' }}
+                              onChange={(e) =>
+                                handleFieldChange(
+                                  'productNumber',
+                                  e.target.value
+                                )
+                              }
+                              style={{
+                                border: 'none',
+                                padding: '4px',
+                                fontSize: '12px',
+                                textAlign: 'center',
+                                width: '80%',
+                                outline: 'none',
+                                fontWeight: '600',
+                                backgroundColor: 'transparent',
+                              }}
                               placeholder="Number"
                             />
                           </div>
                         </td>
 
-                        <td style={{ border: '1px solid #cbd5e1', padding: '8px', fontWeight: 'bold', backgroundColor: 'rgba(0,0,0,0.03)', color: '#000', textAlign: 'center' }}>
+                        <td
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '8px',
+                            fontWeight: 'bold',
+                            backgroundColor: 'rgba(0,0,0,0.03)',
+                            color: '#000',
+                            textAlign: 'center',
+                          }}
+                        >
                           NIGHTS
                         </td>
 
                         {tableData.productionValues.NIGHTS.map((val, idx) => (
-                          <td key={idx} style={{ border: '1px solid #cbd5e1', padding: '4px', backgroundColor: '#fff' }}>
+                          <td
+                            key={idx}
+                            style={{
+                              border: '1px solid #cbd5e1',
+                              padding: '4px',
+                              backgroundColor: '#fff',
+                            }}
+                          >
                             <input
                               id={`input-single-${SYSTEM_CODE}-NIGHTS-${idx}`}
                               type="number"
                               value={val}
-                              onChange={(e) => handleCellChange('NIGHTS', idx, e.target.value)}
+                              onChange={(e) =>
+                                handleCellChange('NIGHTS', idx, e.target.value)
+                              }
                               onKeyDown={(e) => handleKeyDown(e, 'NIGHTS', idx)}
-                              style={{ width: '100%', border: 'none', textAlign: 'center', padding: '4px 0', fontSize: '12px', outline: 'none', backgroundColor: 'transparent' }}
+                              style={{
+                                width: '100%',
+                                border: 'none',
+                                textAlign: 'center',
+                                padding: '4px 0',
+                                fontSize: '12px',
+                                outline: 'none',
+                                backgroundColor: 'transparent',
+                              }}
                               placeholder="0"
                             />
                           </td>
@@ -1458,42 +1773,126 @@ useEffect(() => {
           )}
 
           {activeTab === 'Breaks' && (
-            <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1', minWidth: '320px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#334155' }}>
+            <div
+              style={{
+                display: 'flex',
+                gap: '24px',
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div
+                style={{
+                  flex: '1',
+                  minWidth: '320px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  backgroundColor: '#fff',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    padding: '16px 20px',
+                    borderBottom: '1px solid #e2e8f0',
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: '1.2rem',
+                      fontWeight: '700',
+                      color: '#334155',
+                    }}
+                  >
                     Break Schedule Card
                   </h3>
 
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                    Schedule based on the selected break shift number (Active Shift: {currentBreakOption})
+                  <p
+                    style={{
+                      margin: '4px 0 0 0',
+                      fontSize: '0.85rem',
+                      color: '#64748b',
+                    }}
+                  >
+                    Schedule based on the selected break shift number (Active
+                    Shift: {currentBreakOption})
                   </p>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
+                  <div
+                    style={{
+                      padding: '20px',
+                      borderBottom: '1px solid #f1f5f9',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: '700',
+                        color: '#94a3b8',
+                        marginBottom: '4px',
+                      }}
+                    >
                       1ST
                     </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
+                    <div
+                      style={{
+                        fontSize: '1.5rem',
+                        fontWeight: '700',
+                        color: '#1e293b',
+                      }}
+                    >
                       {activeSchedules.first}
                     </div>
                   </div>
 
-                  <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
+                  <div
+                    style={{
+                      padding: '20px',
+                      borderBottom: '1px solid #f1f5f9',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: '700',
+                        color: '#94a3b8',
+                        marginBottom: '4px',
+                      }}
+                    >
                       2ND
                     </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
+                    <div
+                      style={{
+                        fontSize: '1.5rem',
+                        fontWeight: '700',
+                        color: '#1e293b',
+                      }}
+                    >
                       {activeSchedules.second}
                     </div>
                   </div>
 
                   <div style={{ padding: '20px' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
+                    <div
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: '700',
+                        color: '#94a3b8',
+                        marginBottom: '4px',
+                      }}
+                    >
                       3RD
                     </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
+                    <div
+                      style={{
+                        fontSize: '1.5rem',
+                        fontWeight: '700',
+                        color: '#1e293b',
+                      }}
+                    >
                       {activeSchedules.third}
                     </div>
                   </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { UserCheck, BarChart3, Coffee } from 'lucide-react';
+import { UserCheck, BarChart3, Coffee, PackageOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import PlasticInventorySingleLine from '../components/PlasticInventorySingleLine';
 
 const SYSTEM_NAME = 'system3';
 const SYSTEM_LABEL = 'System 3';
@@ -651,6 +652,11 @@ useEffect(() => {
       desc: 'View current active break schedules assigned remotely.',
       icon: <Coffee size={24} />,
     },
+    {
+      title: 'Plastic Inventory',
+      desc: 'Calculate plastic physical count, used qty, and rejects.',
+      icon: <PackageOpen size={24} />,
+    },
   ];
 
   const tabs = [
@@ -658,6 +664,7 @@ useEffect(() => {
     'Attendance',
     'Run Total',
     'Breaks',
+    'Plastic Inventory',
   ];
 
   if (authLoading) {
@@ -978,6 +985,10 @@ useEffect(() => {
                 </div>
               ))}
             </div>
+          )}
+
+          {activeTab === 'Plastic Inventory' && (
+            <PlasticInventorySingleLine system="system3" title="SYSTEM 3" />
           )}
 
           {activeTab === 'Attendance' && (
