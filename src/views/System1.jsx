@@ -5,11 +5,11 @@ import {
   BarChart3,
   CalendarClock,
   Coffee,
-  Newspaper,
-  ShieldCheck,
   UserCheck,
+  PackageOpen,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import PlasticInventory from '../components/PlasticInventory';
 
 const SYSTEM_NAME = 'system1';
 const SYSTEM_LABEL = 'System 1';
@@ -57,7 +57,7 @@ export default function System1() {
         const { data, error } = await supabase
           .from('device_authorizations')
           .select('id, system_name, device_token, is_active')
-          .eq('system_name', 'system1')
+          .eq('system_name', SYSTEM_NAME)
           .eq('device_token', token)
           .eq('is_active', true)
           .maybeSingle();
@@ -144,8 +144,8 @@ export default function System1() {
   };
 
   const handleTabChange = (tabName) => {
-  setActiveTab(tabName);
-};
+    setActiveTab(tabName);
+  };
 
   // RUN TOTAL
   const [tableData, setTableData] = useState(() => {
@@ -636,7 +636,6 @@ useEffect(() => {
   const [expandedQcCard, setExpandedQcCard] = useState(null);
   const [qcLanguage, setQcLanguage] = useState('en');
 
-
   // LABELS
   const [labelData, setLabelData] = useState({
     shift: '1',
@@ -648,8 +647,6 @@ useEffect(() => {
     startingPallet: '1',
     misc: '',
   });
-
-  const [labelsCreated, setLabelsCreated] = useState(false);
 
   const shift1Jobs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M'];
   const shift2Jobs = ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'];
@@ -676,16 +673,6 @@ useEffect(() => {
     const dd = String(today.getDate()).padStart(2, '0');
     const yy = String(today.getFullYear()).slice(-2);
     return { mm, dd, yy };
-  };
-
-  const normalizeDatePart = (part) => {
-    const cleaned = String(part || '').replace(/\D/g, '');
-    if (!cleaned) return '';
-
-    const number = parseInt(cleaned, 10);
-    if (Number.isNaN(number)) return '';
-
-    return String(number);
   };
 
   const formatDateCodeInput = (value) => {
@@ -848,7 +835,6 @@ useEffect(() => {
   ]);
 
   const handleLabelChange = (field, value) => {
-    setLabelsCreated(false);
     setLabelData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -954,8 +940,7 @@ useEffect(() => {
         dateCode: '',
       }));
 
-      setLabelsCreated(false);
-    } catch (error) {
+      } catch (error) {
       console.error('Label print error:', error);
       alert(`Unable to print labels: ${error.message}`);
     }
@@ -978,6 +963,12 @@ useEffect(() => {
       icon: <BarChart3 size={24} />,
     },
     {
+      title: 'Plastic Inventory',
+      desc: 'Calculate plastic physical count, used qty, and rejects.',
+      icon: <PackageOpen size={24} />,
+    },
+
+    {
       title: 'Exp. Calc',
       desc: 'Check if the product is within the 90-day limit from the manufacture date.',
       icon: <CalendarClock size={24} />,
@@ -993,29 +984,18 @@ useEffect(() => {
       icon: <ClipboardCheck size={24} />,
     },
 
-    {
-      title: 'News',
-      desc: 'Internal announcements, alerts, updates, and notifications.',
-      icon: <Newspaper size={24} />,
-    },
-    {
-      title: 'Rules',
-      desc: 'Operational rules and workstation requirements.',
-      icon: <ShieldCheck size={24} />,
-    },
   ];
 
-const tabs = [
-  'Home',
-  'Attendance',
-  'QC',
-  'Run Total',
-  'Exp. Calc',
-  'Breaks',
-  'Labels',
-  'News',
-  'Rules',
-];
+  const tabs = [
+    'Home',
+    'Attendance',
+    'QC',
+    'Run Total',
+    'Plastic Inventory',
+    'Exp. Calc',
+    'Breaks',
+    'Labels',
+  ];
 
   if (authLoading) {
     return (
@@ -1387,7 +1367,7 @@ const tabs = [
             placeholder="Search employee..."
             onChange={(e) => {
               setEmployeeSearch(e.target.value);
-                        setHighlightedEmployeeIndex(0);
+              setHighlightedEmployeeIndex(0);
               setSelectedEmployee('');
             }}
             onKeyDown={handleAttendanceSearchKeyDown}
@@ -2184,6 +2164,9 @@ Entonces puedes comenzar a preparar y completar toda la documentación y papeler
             </div>
           )}
 
+          {/* PLASTIC INVENTORY */}
+          {activeTab === 'Plastic Inventory' && <PlasticInventory />}
+
           {/* EXP. CALC */}
           {activeTab === 'Exp. Calc' && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px 0' }}>
@@ -2522,130 +2505,11 @@ Entonces puedes comenzar a preparar y completar toda la documentación y papeler
             </div>
           )}
 
-          {/* NEWS */}
-          {activeTab === 'News' && (
-            <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '280px' }}>
-                <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '16px', backgroundColor: '#fff' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '6px' }}>
-                    LAST UPDATE
-                  </div>
-
-                  <div style={{ fontSize: '1.4rem', fontWeight: '700', color: '#334155' }}>
-                    {localStorage.getItem('global_system_news_time') || '--:--'}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ flex: '1', minWidth: '320px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#334155' }}>
-                    System 1 News
-                  </h3>
-
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                    Announcements published from the control panel.
-                  </p>
-                </div>
-
-                <div style={{ padding: '24px', minHeight: '260px', backgroundColor: '#fff' }}>
-                  <div
-                    style={{
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '6px',
-                      backgroundColor: '#f8fafc',
-                      padding: '20px',
-                      minHeight: '190px',
-                      color: '#334155',
-                      fontSize: '1rem',
-                      lineHeight: '1.7',
-                      fontWeight: '500',
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {localStorage.getItem('global_system_news')?.trim()
-                      ? localStorage.getItem('global_system_news')
-                      : 'No announcements available.'}
-                  </div>
-                </div>
-
-                <div style={{ padding: '12px 20px', backgroundColor: '#fef9c3', borderTop: '1px solid #fef08a', color: '#713f12', fontSize: '0.85rem', fontWeight: '500' }}>
-                  News may change during the day. Refresh if the latest update does not appear.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* RULES */}
-          {activeTab === 'Rules' && (
-            <div style={{ flex: '1', minWidth: '320px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#334155' }}>
-                  System 1 Rules
-                </h3>
-
-                <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                  Operational rules and workstation requirements.
-                </p>
-              </div>
-
-              <div style={{ padding: '24px', backgroundColor: '#fff' }}>
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
-                  {[
-                    'Always verify product before use.',
-                    'Check expiration dates before production.',
-                    'Do not leave the station unattended.',
-                    'Notify supervisor about any issue immediately.',
-                    'Keep workstation clean during operation.',
-                    'Use proper PPE at all times.',
-                  ].map((rule, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: '18px 20px',
-                        borderBottom: index !== 5 ? '1px solid #f1f5f9' : 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '14px',
-                        backgroundColor: '#fff',
-                      }}
-                    >
-                      <div
-                        style={{
-                          minWidth: '30px',
-                          height: '30px',
-                          borderRadius: '50%',
-                          backgroundColor: '#dc2626',
-                          color: '#fff',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: '700',
-                          fontSize: '0.9rem',
-                        }}
-                      >
-                        {index + 1}
-                      </div>
-
-                      <div style={{ color: '#334155', fontSize: '0.97rem', fontWeight: '500' }}>
-                        {rule}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ padding: '12px 20px', backgroundColor: '#fef2f2', borderTop: '1px solid #fecaca', color: '#991b1b', fontSize: '0.85rem', fontWeight: '500' }}>
-                Failure to follow these rules may result in production issues.
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 }
-
 
 function CompactLabelControl({ label, children }) {
   return (
@@ -2779,25 +2643,6 @@ function PreviewBarcodeRow({ label, value, barcodeId, editable, onChange, onBlur
         )}
       </div>
     </div>
-  );
-}
-
-
-function LabelFormText({ label, children }) {
-  return (
-    <>
-      <div
-        style={{
-          textAlign: 'right',
-          color: '#374151',
-          fontSize: '1.05rem',
-          fontWeight: '800',
-        }}
-      >
-        {label}:
-      </div>
-      <div>{children}</div>
-    </>
   );
 }
 
@@ -2952,52 +2797,6 @@ const labelButtonRed = {
   fontWeight: '900',
   cursor: 'pointer',
   boxShadow: '0 6px 14px rgba(220,38,38,0.18)',
-};
-
-const labelButtonGray = {
-  backgroundColor: '#334155',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '10px',
-  padding: '12px 22px',
-  fontWeight: '900',
-  cursor: 'pointer',
-  boxShadow: '0 6px 14px rgba(51,65,85,0.18)',
-};
-
-const palletLabelInput = {
-  width: '230px',
-  maxWidth: '100%',
-  height: '36px',
-  border: '2px solid #9ca3af',
-  borderRadius: '2px',
-  padding: '4px 8px',
-  boxSizing: 'border-box',
-  color: '#111827',
-  backgroundColor: '#fff',
-  fontSize: '1rem',
-  fontWeight: '700',
-  outline: 'none',
-};
-
-const palletLabelReadOnlyInput = {
-  ...palletLabelInput,
-  backgroundColor: '#e5e7eb',
-  color: '#374151',
-  cursor: 'not-allowed',
-};
-
-const labelIconButton = {
-  width: '76px',
-  height: '58px',
-  border: '2px solid #6b7280',
-  backgroundColor: '#e5e7eb',
-  color: '#111827',
-  borderRadius: '4px',
-  fontSize: '1.5rem',
-  fontWeight: '900',
-  cursor: 'pointer',
-  boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.12)',
 };
 
 const attendanceThLeft = {

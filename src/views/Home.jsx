@@ -2,8 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Monitor, 
   Coffee, 
-  Users, 
-  Newspaper,
+  Users,
   Database,
   Boxes,
 } from 'lucide-react';
@@ -61,14 +60,6 @@ export default function Home() {
     },
 
     {
-      id: 7,
-      title: 'NEWS',
-      desc: 'Internal announcements and updates.',
-      icon: <Newspaper size={40} />,
-      path: '/news'
-    },
-
-    {
       id: 8,
       title: 'EMPLOYEES',
       desc: 'Register and manage employee names.',
@@ -98,7 +89,8 @@ export default function Home() {
       desc: "Manage weekly supplies orders.",
       icon: <Boxes size={40} />,
       path: "/supplies",
-    }
+    },
+
   ];
 
   return (

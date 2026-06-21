@@ -7,7 +7,6 @@ import System2 from './views/System2';
 import System3 from './views/System3';
 import System4 from './views/System4';
 import Groups from './views/Groups';
-import News from './views/News';
 import Employees from './views/Employees';
 import Attendance from './views/Attendance';
 import DeviceAccess from './views/DeviceAccess';
@@ -60,15 +59,6 @@ function App() {
   element={
     <ProtectedAdminRoute>
       <Groups />
-    </ProtectedAdminRoute>
-  }
-/>
-
-<Route
-  path="/news"
-  element={
-    <ProtectedAdminRoute>
-      <News />
     </ProtectedAdminRoute>
   }
 />
