@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserCheck, BarChart3, Coffee, PackageOpen } from 'lucide-react';
+import { UserCheck, BarChart3, PackageOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import PlasticInventorySingleLine from '../components/PlasticInventorySingleLine';
 
@@ -236,75 +236,7 @@ export default function System2() {
   const currentBgColor =
     totalRemaining <= 0 && targetAmount > 0 ? '#fee2e2' : '#dcfce7';
 
-  // BREAKS
-  const [config, setConfig] = useState({
-    system1: 1,
-    system2: 1,
-    system3: 1,
-    system4: 1,
-  });
-
-  useEffect(() => {
-    const loadBreakConfig = async () => {
-      const { data, error } = await supabase
-        .from('break_config')
-        .select('*')
-        .eq('id', 1)
-        .single();
-
-      if (error) {
-        console.error('Load break config error:', error);
-        return;
-      }
-
-      setConfig({
-        system1: data.system1,
-        system2: data.system2,
-        system3: data.system3,
-        system4: data.system4,
-      });
-    };
-
-    loadBreakConfig();
-
-    const channel = supabase
-      .channel(`${SYSTEM_NAME}-break-config`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'break_config' },
-        loadBreakConfig
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const currentBreakOption = config.system2 || 1;
-
-  const breakSchedules = {
-    1: {
-      first: '8:30 - 8:45',
-      second: '12:00 - 12:30',
-      third: '4:00 - 4:15',
-    },
-    2: {
-      first: '8:50 - 9:05',
-      second: '12:35 - 13:05',
-      third: '4:20 - 4:35',
-    },
-    3: {
-      first: '9:10 - 9:25',
-      second: '13:10 - 13:40',
-      third: '4:40 - 4:55',
-    },
-  };
-
-  const activeSchedules =
-    breakSchedules[currentBreakOption] || breakSchedules[1];
-
-  // ATTENDANCE
+// ATTENDANCE
   const [attendanceRows, setAttendanceRows] = useState(() => {
     const saved = localStorage.getItem(`${SYSTEM_NAME}_attendance_rows`);
     return saved ? JSON.parse(saved) : [];
@@ -648,11 +580,6 @@ export default function System2() {
       icon: <BarChart3 size={24} />,
     },
     {
-      title: 'Breaks',
-      desc: 'View current active break schedules assigned remotely.',
-      icon: <Coffee size={24} />,
-    },
-    {
       title: 'Plastic Inventory',
       desc: 'Calculate plastic physical count, used qty, and rejects.',
       icon: <PackageOpen size={24} />,
@@ -662,9 +589,9 @@ export default function System2() {
   const tabs = [
     'Home',
     'Attendance',
-    'Run Total',
-    'Breaks',
     'Plastic Inventory',
+    'Run Total',
+    
   ];
 
   if (authLoading) {
@@ -1772,134 +1699,6 @@ export default function System2() {
             </div>
           )}
 
-          {activeTab === 'Breaks' && (
-            <div
-              style={{
-                display: 'flex',
-                gap: '24px',
-                alignItems: 'flex-start',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div
-                style={{
-                  flex: '1',
-                  minWidth: '320px',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  backgroundColor: '#fff',
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    padding: '16px 20px',
-                    borderBottom: '1px solid #e2e8f0',
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: '1.2rem',
-                      fontWeight: '700',
-                      color: '#334155',
-                    }}
-                  >
-                    Break Schedule Card
-                  </h3>
-
-                  <p
-                    style={{
-                      margin: '4px 0 0 0',
-                      fontSize: '0.85rem',
-                      color: '#64748b',
-                    }}
-                  >
-                    Schedule based on the selected break shift number (Active
-                    Shift: {currentBreakOption})
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div
-                    style={{
-                      padding: '20px',
-                      borderBottom: '1px solid #f1f5f9',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '0.75rem',
-                        fontWeight: '700',
-                        color: '#94a3b8',
-                        marginBottom: '4px',
-                      }}
-                    >
-                      1ST
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '1.5rem',
-                        fontWeight: '700',
-                        color: '#1e293b',
-                      }}
-                    >
-                      {activeSchedules.first}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      padding: '20px',
-                      borderBottom: '1px solid #f1f5f9',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '0.75rem',
-                        fontWeight: '700',
-                        color: '#94a3b8',
-                        marginBottom: '4px',
-                      }}
-                    >
-                      2ND
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '1.5rem',
-                        fontWeight: '700',
-                        color: '#1e293b',
-                      }}
-                    >
-                      {activeSchedules.second}
-                    </div>
-                  </div>
-
-                  <div style={{ padding: '20px' }}>
-                    <div
-                      style={{
-                        fontSize: '0.75rem',
-                        fontWeight: '700',
-                        color: '#94a3b8',
-                        marginBottom: '4px',
-                      }}
-                    >
-                      3RD
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '1.5rem',
-                        fontWeight: '700',
-                        color: '#1e293b',
-                      }}
-                    >
-                      {activeSchedules.third}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

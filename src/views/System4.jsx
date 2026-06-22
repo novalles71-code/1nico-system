@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { UserCheck, BarChart3, Coffee } from 'lucide-react';
+import { UserCheck, BarChart3, CalendarClock, PackageOpen} from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import System4Inventory from '../components/System4Inventory';
 
 const SYSTEM_NAME = 'system4';
 const SYSTEM_LABEL = 'System 4';
@@ -231,75 +232,52 @@ export default function System4() {
   const currentBgColor =
     totalRemaining <= 0 && targetAmount > 0 ? '#fee2e2' : '#dcfce7';
 
-  // BREAKS
-  const [config, setConfig] = useState({
-  system1: 1,
-  system2: 1,
-  system3: 1,
-  system4: 1,
-});
+    // EXP CALC
+const [inputDate, setInputDate] = useState('');
+const [result, setResult] = useState(null);
 
-useEffect(() => {
-  const loadBreakConfig = async () => {
-    const { data, error } = await supabase
-      .from('break_config')
-      .select('*')
-      .eq('id', 1)
-      .single();
+const calculateExpiration = (e) => {
+  e.preventDefault();
 
-    if (error) {
-      console.error('Load break config error:', error);
-      return;
-    }
+  if (!inputDate) return;
 
-    setConfig({
-      system1: data.system1,
-      system2: data.system2,
-      system3: data.system3,
-      system4: data.system4,
+  const manufactureDate = new Date(inputDate);
+  const today = new Date();
+
+  manufactureDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  const daysElapsed = Math.floor(
+    (today.getTime() - manufactureDate.getTime()) / (1000 * 3600 * 24)
+  );
+
+  if (daysElapsed < 0) {
+    setResult({
+      type: 'error',
+      message: 'The manufacture date cannot be in the future!',
     });
-  };
+    return;
+  }
 
-  loadBreakConfig();
+  if (daysElapsed <= 80) {
+    setResult({
+      type: 'success',
+      message: `The product is ${daysElapsed} days old, you can use it.`,
+    });
+  } else if (daysElapsed <= 89) {
+    setResult({
+      type: 'warning',
+      message: `The product is ${daysElapsed} days old. It is good, you can use it but notify your supervisor, it is close to expiring.`,
+    });
+  } else {
+    setResult({
+      type: 'danger',
+      message: `STOP THE MACHINES AND CALL YOUR SUPERVISOR! THE PRODUCT IS ${daysElapsed} DAYS OLD. THE CANDY IS NOT GOOD.`,
+    });
+  }
+};
 
-  const channel = supabase
-    .channel(`${SYSTEM_NAME}-break-config`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'break_config' },
-      loadBreakConfig
-    )
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
-
-  const currentBreakOption = config.system4 || 1;
-
-  const breakSchedules = {
-    1: {
-      first: '8:30 - 8:45',
-      second: '12:00 - 12:30',
-      third: '4:00 - 4:15',
-    },
-    2: {
-      first: '8:50 - 9:05',
-      second: '12:35 - 13:05',
-      third: '4:20 - 4:35',
-    },
-    3: {
-      first: '9:10 - 9:25',
-      second: '13:10 - 13:40',
-      third: '4:40 - 4:55',
-    },
-  };
-
-  const activeSchedules =
-    breakSchedules[currentBreakOption] || breakSchedules[1];
-
-  // ATTENDANCE
+// ATTENDANCE
   const [attendanceRows, setAttendanceRows] = useState(() => {
     const saved = localStorage.getItem(`${SYSTEM_NAME}_attendance_rows`);
     return saved ? JSON.parse(saved) : [];
@@ -637,6 +615,16 @@ useEffect(() => {
 
   const homeModulesInfo = [
     {
+      title: 'Inventory',
+      desc: 'Plastic and zipper inventory count.',
+      icon: <PackageOpen size={24} />,
+    },
+    {
+    title: 'Exp. Calc',
+    desc: 'Check if the product is within the 90-day limit from the manufacture date.',
+    icon: <CalendarClock size={24} />,
+    },
+    {
       title: 'Attendance',
       desc: 'Daily operator attendance status.',
       icon: <UserCheck size={24} />,
@@ -646,19 +634,15 @@ useEffect(() => {
       desc: 'Weekly production tracking, active weeks, totals, and weekly progress.',
       icon: <BarChart3 size={24} />,
     },
-    {
-      title: 'Breaks',
-      desc: 'View current active break schedules assigned remotely.',
-      icon: <Coffee size={24} />,
-    },
   ];
 
   const tabs = [
     'Home',
     'Attendance',
+    'Inventory',
+    'Exp. Calc',
     'Run Total',
-    'Breaks',
-  ];
+    ];
 
   if (authLoading) {
     return (
@@ -977,6 +961,87 @@ useEffect(() => {
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+
+          {activeTab === 'Inventory' && <System4Inventory />}
+
+          {/* EXP. CALC */}
+          {activeTab === 'Exp. Calc' && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px 0' }}>
+              <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', width: '100%', maxWidth: '500px', overflow: 'hidden' }}>
+                <div style={{ padding: '20px', borderBottom: '1px solid #e2e8f0', textAlign: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: '700', color: '#1e3a8a' }}>
+                    Expiration Date Calculator
+                  </h3>
+                </div>
+
+                <form onSubmit={calculateExpiration} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                    <label style={{ fontWeight: '700', fontSize: '0.95rem', color: '#334155', whiteSpace: 'nowrap' }}>
+                      Date of Manufacture:
+                    </label>
+
+                    <input
+                      type="date"
+                      value={inputDate}
+                      onChange={(e) => setInputDate(e.target.value)}
+                      required
+                      style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px 12px', fontSize: '1rem', color: '#334155', outline: 'none', backgroundColor: '#f8fafc', width: '100%', maxWidth: '200px' }}
+                    />
+                  </div>
+
+                  <button type="submit" style={{ backgroundColor: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', padding: '10px 16px', fontSize: '1rem', fontWeight: '600', cursor: 'pointer', width: '100%' }}>
+                    Enter
+                  </button>
+                </form>
+
+                <div style={{ padding: '0 24px 24px 24px' }}>
+                  {!result ? (
+                    <div style={{ backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '16px', textAlign: 'center', color: '#64748b', fontSize: '0.95rem', fontWeight: '500' }}>
+                      Enter the manufacture date and press Enter.
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        backgroundColor:
+                          result.type === 'success'
+                            ? '#dcfce7'
+                            : result.type === 'warning'
+                            ? '#fef9c3'
+                            : result.type === 'danger'
+                            ? '#fee2e2'
+                            : '#f1f5f9',
+                        border: `1px solid ${
+                          result.type === 'success'
+                            ? '#22c55e'
+                            : result.type === 'warning'
+                            ? '#eab308'
+                            : result.type === 'danger'
+                            ? '#ef4444'
+                            : '#cbd5e1'
+                        }`,
+                        color:
+                          result.type === 'success'
+                            ? '#14532d'
+                            : result.type === 'warning'
+                            ? '#713f12'
+                            : result.type === 'danger'
+                            ? '#742020'
+                            : '#475569',
+                        borderRadius: '6px',
+                        padding: '16px',
+                        fontSize: '1rem',
+                        fontWeight: result.type === 'danger' ? '800' : '600',
+                        lineHeight: '1.5',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {result.message}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1457,50 +1522,6 @@ useEffect(() => {
             </div>
           )}
 
-          {activeTab === 'Breaks' && (
-            <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1', minWidth: '320px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#334155' }}>
-                    Break Schedule Card
-                  </h3>
-
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                    Schedule based on the selected break shift number (Active Shift: {currentBreakOption})
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
-                      1ST
-                    </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
-                      {activeSchedules.first}
-                    </div>
-                  </div>
-
-                  <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
-                      2ND
-                    </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
-                      {activeSchedules.second}
-                    </div>
-                  </div>
-
-                  <div style={{ padding: '20px' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
-                      3RD
-                    </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
-                      {activeSchedules.third}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

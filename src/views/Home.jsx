@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { 
   Monitor, 
-  Coffee, 
   Users,
   Database,
   Boxes,
@@ -41,14 +40,6 @@ export default function Home() {
       desc: 'Access station 4 core module.',
       icon: <Monitor size={40} />,
       path: '/system-4'
-    },
-
-    {
-      id: 5,
-      title: 'BREAK CONTROL',
-      desc: 'Manage and monitor staff breaks.',
-      icon: <Coffee size={40} />,
-      path: '/break-control'
     },
 
     {

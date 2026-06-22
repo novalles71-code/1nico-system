@@ -4,8 +4,7 @@ import {
   ClipboardCheck,
   BarChart3,
   CalendarClock,
-  Coffee,
-  UserCheck,
+    UserCheck,
   PackageOpen,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -240,75 +239,7 @@ export default function System1() {
   const currentBgColor =
     totalRemaining <= 0 && targetAmount > 0 ? '#fee2e2' : '#dcfce7';
 
-  // BREAKS
-  const [config, setConfig] = useState({
-  system1: 1,
-  system2: 1,
-  system3: 1,
-  system4: 1,
-});
-
-useEffect(() => {
-  const loadBreakConfig = async () => {
-    const { data, error } = await supabase
-      .from('break_config')
-      .select('*')
-      .eq('id', 1)
-      .single();
-
-    if (error) {
-      console.error('Load break config error:', error);
-      return;
-    }
-
-    setConfig({
-      system1: data.system1,
-      system2: data.system2,
-      system3: data.system3,
-      system4: data.system4,
-    });
-  };
-
-  loadBreakConfig();
-
-  const channel = supabase
-    .channel(`${SYSTEM_NAME}-break-config`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'break_config' },
-      loadBreakConfig
-    )
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
-
-  const currentBreakOption = config.system1 || 1;
-
-  const breakSchedules = {
-    1: {
-      first: '8:30 - 8:45',
-      second: '12:00 - 12:30',
-      third: '4:00 - 4:15',
-    },
-    2: {
-      first: '8:50 - 9:05',
-      second: '12:35 - 13:05',
-      third: '4:20 - 4:35',
-    },
-    3: {
-      first: '9:10 - 9:25',
-      second: '13:10 - 13:40',
-      third: '4:40 - 4:55',
-    },
-  };
-
-  const activeSchedules =
-    breakSchedules[currentBreakOption] || breakSchedules[1];
-
-  // EXP CALC
+// EXP CALC
   const [inputDate, setInputDate] = useState('');
   const [result, setResult] = useState(null);
 
@@ -974,11 +905,6 @@ useEffect(() => {
       icon: <CalendarClock size={24} />,
     },
     {
-      title: 'Breaks',
-      desc: 'View current active break schedules assigned remotely.',
-      icon: <Coffee size={24} />,
-    },
-    {
       title: 'Labels',
       desc: 'Label Format. White Label',
       icon: <ClipboardCheck size={24} />,
@@ -988,13 +914,13 @@ useEffect(() => {
 
   const tabs = [
     'Home',
+    'Labels',
     'Attendance',
-    'QC',
-    'Run Total',
     'Plastic Inventory',
     'Exp. Calc',
-    'Breaks',
-    'Labels',
+    'Run Total',
+    'QC',
+    
   ];
 
   if (authLoading) {
@@ -2246,55 +2172,6 @@ Entonces puedes comenzar a preparar y completar toda la documentación y papeler
             </div>
           )}
 
-          {/* BREAKS */}
-          {activeTab === 'Breaks' && (
-            <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1', minWidth: '320px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff', overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#334155' }}>
-                    Break Schedule Card
-                  </h3>
-
-                  <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
-                    Schedule based on the selected break shift number (Active Shift: {currentBreakOption})
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
-                      1ST
-                    </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
-                      {activeSchedules.first}
-                    </div>
-                  </div>
-
-                  <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
-                      2ND
-                    </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
-                      {activeSchedules.second}
-                    </div>
-                  </div>
-
-                  <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
-                      3RD
-                    </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
-                      {activeSchedules.third}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ padding: '12px 20px', backgroundColor: '#fef9c3', borderTop: '1px solid #fef08a', color: '#713f12', fontSize: '0.85rem', fontWeight: '500' }}>
-                  Break times may change during the day.
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* LABELS */}
           {activeTab === 'Labels' && (

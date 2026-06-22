@@ -1,34 +1,21 @@
 import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 const defaultPlasticData = {
-  todaysStartingQty: '',
   pcsPerFullRoll: '',
   fullRollsRemaining: '',
   totalGoodBagsProduced: '',
-  startingRollQty: '',
   batchCount: '',
 };
 
-export default function PlasticInventorySingleLine({ system = 'system2', title = 'SYSTEM 2' }) {
-  const STORAGE_KEY = `${system}_plastic_inventory_single_line`;
-
-  const [plasticData, setPlasticData] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return defaultPlasticData;
-      }
-    }
-
-    return defaultPlasticData;
-  });
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(plasticData));
-  }, [STORAGE_KEY, plasticData]);
+export default function PlasticInventorySingleLine({
+  system = 'system2',
+  title = 'SYSTEM 2',
+}) {
+  const [plasticData, setPlasticData] = useState(defaultPlasticData);
+  const [startingRollQty, setStartingRollQty] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const num = (value) => {
     const n = Number(String(value || '').replace(/,/g, ''));
@@ -41,7 +28,33 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
     setPlasticData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const start = num(plasticData.startingRollQty);
+  const loadLastLeftOver = async () => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from('material_inventory_state')
+      .select('last_left_over')
+      .eq('system_name', system)
+      .eq('material_type', 'plastic')
+      .eq('line_name', 'MAIN')
+      .maybeSingle();
+
+    if (error) {
+      console.error('Load plastic L/O error:', error);
+      alert('Unable to load last plastic L/O.');
+      setLoading(false);
+      return;
+    }
+
+    setStartingRollQty(String(data?.last_left_over || ''));
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadLastLeftOver();
+  }, [system]);
+
+  const start = num(startingRollQty);
   const batch = num(plasticData.batchCount);
   const pcsPerRoll = num(plasticData.pcsPerFullRoll);
 
@@ -51,7 +64,9 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
   if (batch > start && pcsPerRoll > 0) {
     const extraUsed = batch - start;
     const usedOnCurrentRoll = extraUsed % pcsPerRoll;
-    rollPlasticLO = usedOnCurrentRoll === 0 ? 0 : pcsPerRoll - usedOnCurrentRoll;
+
+    rollPlasticLO =
+      usedOnCurrentRoll === 0 ? 0 : pcsPerRoll - usedOnCurrentRoll;
 
     rollWarning =
       'Batch count is higher than starting roll qty. Possible counter was not reset. System adjusted automatically.';
@@ -67,7 +82,7 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
 
   const totalLO = fullRollsTotal + rollPlasticLO;
 
-  const usedQty = num(plasticData.todaysStartingQty) - totalLO;
+  const usedQty = start + fullRollsTotal - totalLO;
 
   const rejects = usedQty - num(plasticData.totalGoodBagsProduced);
 
@@ -75,32 +90,67 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
     num(plasticData.totalGoodBagsProduced) > 0 &&
     usedQty < num(plasticData.totalGoodBagsProduced);
 
-  const reset = () => {
-    if (!confirm('Reset Plastic Inventory?')) return;
-    setPlasticData(defaultPlasticData);
-    localStorage.removeItem(STORAGE_KEY);
+  const saveState = async (newLeftOver) => {
+    const { error } = await supabase.from('material_inventory_state').upsert(
+      {
+        system_name: system,
+        material_type: 'plastic',
+        line_name: 'MAIN',
+        last_left_over: newLeftOver,
+        unit: 'pcs',
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'system_name,material_type,line_name',
+      }
+    );
+
+    if (error) {
+      console.error('Save plastic L/O error:', error);
+      alert('Unable to save plastic L/O.');
+      return false;
+    }
+
+    return true;
   };
+
+  const reset = async () => {
+    if (!confirm('Save current L/O and reset this shift?')) return;
+
+    setSaving(true);
+
+    const ok = await saveState(rollPlasticLO);
+
+    if (ok) {
+      setStartingRollQty(String(rollPlasticLO));
+      setPlasticData(defaultPlasticData);
+      alert('Shift reset. Last L/O saved for next shift.');
+    }
+
+    setSaving(false);
+  };
+
+  if (loading) {
+    return <div style={styles.loadingBox}>Loading last plastic L/O...</div>;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <div style={styles.wrapper}>
         <div style={styles.header}>
           <h3 style={styles.title}>Plastic Inventory</h3>
-          <p style={styles.subtitle}>
-            Enter starting quantity, roll information, batch count, and good bags produced.
-          </p>
         </div>
 
         <div style={styles.body}>
           <div style={styles.topGrid}>
             {[
-              ['todaysStartingQty', "Today's Starting QTY"],
               ['pcsPerFullRoll', 'Pcs per Full Roll'],
               ['fullRollsRemaining', 'Full Rolls Remaining'],
               ['totalGoodBagsProduced', 'Total Good Bags Produced'],
             ].map(([field, label]) => (
               <div key={field}>
                 <label style={styles.label}>{label}</label>
+
                 <input
                   type="number"
                   value={plasticData[field]}
@@ -118,10 +168,11 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
 
               <div style={styles.lineBody}>
                 <label style={styles.label}>Starting Roll QTY</label>
+
                 <input
                   type="number"
-                  value={plasticData.startingRollQty}
-                  onChange={(e) => updateField('startingRollQty', e.target.value)}
+                  value={startingRollQty}
+                  onChange={(e) => setStartingRollQty(e.target.value)}
                   placeholder="0"
                   style={styles.input}
                 />
@@ -129,6 +180,7 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
                 <label style={{ ...styles.label, marginTop: '14px' }}>
                   Batch Count
                 </label>
+
                 <input
                   type="number"
                   value={plasticData.batchCount}
@@ -154,7 +206,9 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
                   </div>
                 </div>
 
-                {rollWarning && <div style={styles.lineWarning}>{rollWarning}</div>}
+                {rollWarning && (
+                  <div style={styles.lineWarning}>{rollWarning}</div>
+                )}
               </div>
             </div>
           </div>
@@ -194,6 +248,7 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
               }}
             >
               <span style={styles.summaryLabel}>Rejects</span>
+
               <b
                 style={{
                   ...styles.summaryValue,
@@ -212,8 +267,8 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
           )}
 
           <div style={styles.resetRow}>
-            <button onClick={reset} style={styles.resetButton}>
-              Reset
+            <button onClick={reset} disabled={saving} style={styles.resetButton}>
+              {saving ? 'Saving...' : 'Reset'}
             </button>
           </div>
         </div>
@@ -223,6 +278,12 @@ export default function PlasticInventorySingleLine({ system = 'system2', title =
 }
 
 const styles = {
+  loadingBox: {
+    padding: '24px',
+    textAlign: 'center',
+    fontWeight: '900',
+    color: '#475569',
+  },
   wrapper: {
     border: '1px solid #cbd5e1',
     borderRadius: '12px',

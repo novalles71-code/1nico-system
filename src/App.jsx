@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Login from './views/Login';
 import Home from './views/Home';
-import BreakControl from './views/BreakControl';
 import System1 from './views/System1';
 import System2 from './views/System2';
 import System3 from './views/System3';
@@ -41,15 +40,6 @@ function App() {
   element={
     <ProtectedAdminRoute>
       <Home />
-    </ProtectedAdminRoute>
-  }
-/>
-
-<Route
-  path="/break-control"
-  element={
-    <ProtectedAdminRoute>
-      <BreakControl />
     </ProtectedAdminRoute>
   }
 />
