@@ -591,18 +591,29 @@ export default function System1() {
 
   const availableLabelJobs = labelData.shift === '1' ? shift1Jobs : shift2Jobs;
 
+  const getProductionDate = () => {
+    const productionDate = new Date();
+
+    // Night shift still belongs to the previous production day until 6:00 AM.
+    if (productionDate.getHours() < 6) {
+      productionDate.setDate(productionDate.getDate() - 1);
+    }
+
+    return productionDate;
+  };
+
   const getJulianDay = () => {
-    const today = new Date();
-    const start = new Date(today.getFullYear(), 0, 0);
-    const diff = today - start;
+    const productionDate = getProductionDate();
+    const start = new Date(productionDate.getFullYear(), 0, 0);
+    const diff = productionDate - start;
     return String(Math.floor(diff / 86400000)).padStart(3, '0');
   };
 
   const getDateParts = () => {
-    const today = new Date();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    const yy = String(today.getFullYear()).slice(-2);
+    const productionDate = getProductionDate();
+    const mm = String(productionDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(productionDate.getDate()).padStart(2, '0');
+    const yy = String(productionDate.getFullYear()).slice(-2);
     return { mm, dd, yy };
   };
 
