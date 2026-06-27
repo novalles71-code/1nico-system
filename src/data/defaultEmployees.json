@@ -1,0 +1,644 @@
+[
+  {
+    "name": "JOAN ENMANUEL DE LA CRUZ YNOA",
+    "active": true,
+    "gender": null,
+    "role": "AST"
+  },
+  {
+    "name": "SUZAN I NAYOAN",
+    "active": true,
+    "gender": null,
+    "role": "AST"
+  },
+  {
+    "name": "RANDY DE JESUS MIRABAK SANTOS",
+    "active": true,
+    "gender": null,
+    "role": "AST"
+  },
+  {
+    "name": "NOEL OVALLES YNOA",
+    "active": true,
+    "gender": null,
+    "role": "AST"
+  },
+  {
+    "name": "ESMERALDA EAGLE JIMENEZ",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "IRMA PINEDA",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "JAVIER ADOLFO MOREIRA GARCES",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "MARIA MATOS",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "JORDY VALENZUELA SMITH",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "MIRLANDE NOZIL",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "REINA SOTELO",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "ROSANNA SANTIAGO MARTE",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "CRISTAL GUZMAN PEREZ",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "JOHAN STIVEN GUZMAN OVALLES",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "DIEGO FERNANDO ASMEL MATUTE",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "ODALIS DE LEON",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "PAULA FERREIRA",
+    "active": true,
+    "gender": null,
+    "role": "QC"
+  },
+  {
+    "name": "CARMEN ESPINAL RODRIGUEZ",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "ALEJANDRA RANGEL",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "SARA POLANCO",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "ROBELINA JIMENEZ JIMENEZ",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "RADHAMELIS PEREZ",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "YENY M SOSA",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "NICOL ROSARIO DE LEON",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "SANDRA JANETH OZORIO",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "LUZ ALCANTARA",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "ELIE FELIZ",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "MIGUEL CEDENO AQUINO",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "OLGA RODRIGUEZ",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "LOURDES ESTEFANIA ORTIZ",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "ROCIO BEATRIZ VACACELA ORTIZ",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "ELIDA VENTURA",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "LESBY PAOLA DIAZ CASTILLO",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "VIVICA GARCIA",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "AUSTRIA ALVAREZ",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "ALEXANDRO MEJIA",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "SAUDIK P FERREIRA MEDRANO",
+    "active": true,
+    "gender": null,
+    "role": "OP"
+  },
+  {
+    "name": "MANUEL DOLORES VILLA GONZALEZ",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "EFRAIN RIVERA FIGUEROA",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "RAMON ANTONIO BRETON LARA",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "JOSE RAMON MARTE PENA",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "BRUNO GABRIEL OLIVO SUNTAXI",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "RADHAMES GARCIA",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "CRHISPTOHER MIGUEL GUZMAN PEREZ",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "DAVID AMPARO FLORES",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "MARVIN MALDONADO",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "CHRISTOPHER ISRAEL ZAMBRANO",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "MARTIN PEREZ OSVALDO",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "NICOLAS RAFAEL LOPEZ LUNA",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "NICOLAS LEIVA",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "TOMAS DE JESUS DE LEON",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "CRISTIAN BERBALD PIMENTEL ESTEVEZ",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "INMANOL JIMENEZ",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "NESTOR ALFONSO TEJEDA GONZALEZ",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "JERSON JOSUE HEERRERA VASQUEZ",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "CARLOS GUZMAN",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "RENE DAVID TERRON PADILLA",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "ERNSO JACQUES",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "EDUARDO MELENDEZ ROMAN",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "JUSTIN YNOA VERAS",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "MIGUEL GOMEZ YNOA",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "ALBERTO HERNANDEZ",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "YOAN RODRIGUEZ",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "ARMANDO RAFAEL SIERRA MORENO",
+    "active": true,
+    "gender": "M",
+    "role": "LW"
+  },
+  {
+    "name": "YOLANDA AYALA GARCIA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "VIVIANA GABRIUS",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "LIGIA ELANA CHILLAGANA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "PATRICIA HUARI AMAO",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "FILOMENA POMAQUISA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "DOMINGA ALTAGRACIA JAQUEZ",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "CHRISBEL GUZMAN PEREZ",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "EVA DOMINGUEZ",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "JOSIANE ST. FLEUR",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "DELFINA RODRIGUEZ CISNEROS",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "VINELLA LAURA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "ANASTACIA SAVEDRA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "MARICARMEN SANCHEZ",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "MARIELA FRANCO",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "MIGUELINA MADERA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "MONICA MADERA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "LILIANA PATRICIA TAVAREZ",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "JESSICA LIZETTE SARAVIA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "ERVITA MORILLO CASANOVA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "MONIKA MIRANDA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "MARILYN QUISPE",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "DORIS RAMOS",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "SURIEL AMAYA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "ALBA LUZ ROMERO LAINEZ",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "LOREN FELIZ",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "TIFFANY GARCIA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "MARIA ORTEGA O.",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "IRIS I. CRUZ",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "ROSSY VALERIO CONTRERAS",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "JESSICA TORRES MILLA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "MARIA J CONTRERAS RODRIGUEZ",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "IGNACIO BERNARDO ARACENA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "LUIS A DE LA ROSA",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "VICTOR GRACIANO",
+    "active": true,
+    "gender": "F",
+    "role": "LW"
+  },
+  {
+    "name": "EDGAR DIAZ",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "JESUS DONALDO RAMOS DIAZ",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "ELVIS MINIER FLETE",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "LETICIA ESMERALDA (SCANNER)",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "WILREDO HERRERA PINEDA",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "JOSE FERNANDO RAMOS",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "BRIAN PINEDA",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "STALIN TOAPANTA",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  },
+  {
+    "name": "CARLOS DIAZ",
+    "active": true,
+    "gender": null,
+    "role": "SUPPORT"
+  }
+]

@@ -3,17 +3,15 @@ import { supabase } from '../lib/supabase';
 
 const defaultData = {
   plastic: {
-    todaysStartingQty: '',
     pcsPerFullRoll: '',
     fullRollsRemaining: '',
-    totalGoodBagsProduced: '',
     startingRollQty: '',
     batchCount: '',
   },
   zipper: {
     startingTodayQty: '',
     ftPerFullRoll: '',
-    ftPerBag: '',
+    ftPerFgBox: '',
     fullRollsRemaining: '',
   },
 };
@@ -106,27 +104,14 @@ export default function System4Inventory() {
     num(data.plastic.fullRollsRemaining) * num(data.plastic.pcsPerFullRoll);
 
   const totalPlasticLO = plasticFullRollsTotal + plasticLO;
+  const usedPlastic = pBatch;
 
-  const usedPlastic = num(data.plastic.todaysStartingQty) - totalPlasticLO;
-
-  const plasticRejects =
-    usedPlastic - num(data.plastic.totalGoodBagsProduced);
-
-  const plasticCountWarning =
-    num(data.plastic.totalGoodBagsProduced) > 0 &&
-    usedPlastic < num(data.plastic.totalGoodBagsProduced);
-
-  const ftPerBag = num(data.zipper.ftPerBag);
+  const ftPerFgBox = num(data.zipper.ftPerFgBox);
 
   const zipperFullRollsTotal =
     num(data.zipper.fullRollsRemaining) * num(data.zipper.ftPerFullRoll);
 
-  const usedZipper = usedPlastic * ftPerBag;
-
-  const expectedGoodZipper =
-    num(data.plastic.totalGoodBagsProduced) * ftPerBag;
-
-  const zipperRejects = usedZipper - expectedGoodZipper;
+  const usedZipper = usedPlastic * ftPerFgBox;
 
   const zipperPhysicalLO =
     num(data.zipper.startingTodayQty) + zipperFullRollsTotal - usedZipper;
@@ -199,10 +184,8 @@ export default function System4Inventory() {
 
         <div style={styles.topGrid}>
           {[
-            ['todaysStartingQty', "Today's Starting QTY"],
             ['pcsPerFullRoll', 'PCS per Full Roll'],
             ['fullRollsRemaining', 'Full Rolls Remaining'],
-            ['totalGoodBagsProduced', 'Good Bags Produced'],
           ].map(([field, label]) => (
             <Field
               key={field}
@@ -234,8 +217,6 @@ export default function System4Inventory() {
 
               <ResultBox
                 rows={[
-                  ['Start', format(pStart)],
-                  ['Printed', format(pBatch)],
                   ['Roll Plastic L/O', format(plasticLO)],
                 ]}
               />
@@ -251,15 +232,7 @@ export default function System4Inventory() {
           <Summary label="Full Rolls Total" value={format(plasticFullRollsTotal)} />
           <Summary label="Plastic L/O" value={format(plasticLO)} />
           <Summary label="Total Plastic L/O" value={format(totalPlasticLO)} />
-          <Summary label="Used Plastic" value={format(usedPlastic)} blue />
-          <Summary label="Plastic Rejects" value={format(plasticRejects)} danger={plasticCountWarning} />
         </div>
-
-        {plasticCountWarning && (
-          <div style={styles.countWarning}>
-            Something is wrong with the plastic count. Please review it again.
-          </div>
-        )}
 
         <SectionTitle title="ZIPPER INVENTORY" />
 
@@ -267,7 +240,7 @@ export default function System4Inventory() {
           {[
             ['startingTodayQty', "Starting Today's QTY FT"],
             ['ftPerFullRoll', 'FT per Full Roll'],
-            ['ftPerBag', 'FT per Bag'],
+            ['ftPerFgBox', 'FT per FG Box'],
             ['fullRollsRemaining', 'Full Rolls Remaining'],
           ].map(([field, label]) => (
             <Field
@@ -281,10 +254,6 @@ export default function System4Inventory() {
 
         <div style={styles.summaryGrid}>
           <Summary label="Zipper Full Rolls FT" value={format(zipperFullRollsTotal)} />
-          <Summary label="Used Plastic" value={format(usedPlastic)} blue />
-          <Summary label="Used Zipper FT" value={format(usedZipper)} blue />
-          <Summary label="Expected Good Zipper FT" value={format(expectedGoodZipper)} />
-          <Summary label="Zipper Reject FT" value={format(zipperRejects)} danger={zipperRejects < 0} />
           <Summary label="Physical Zipper L/O" value={format(zipperPhysicalLO)} />
         </div>
 

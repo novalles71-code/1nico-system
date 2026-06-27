@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { readEmployeesFromExcel, cleanEmployeeName } from '../utils/excelEmployees';
+import DEFAULT_EMPLOYEES from '../data/defaultEmployees.json';
 
-const DEFAULT_EMPLOYEES = [];
+const ROLE_OPTIONS = ['AST', 'QC', 'OP', 'LW', 'SUPPORT'];
 
 export default function Employees() {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function Employees() {
   const [employees, setEmployees] = useState([]);
   const [name, setName] = useState('');
   const [gender, setGender] = useState('');
+  const [role, setRole] = useState('LW');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -30,7 +32,7 @@ export default function Employees() {
 
     if (error) {
       console.error('Load employees error:', error);
-      alert('Unable to load employees.');
+      alert('Unable to load employees. Make sure the employees table has the role column.');
       setLoading(false);
       return;
     }
@@ -88,28 +90,21 @@ export default function Employees() {
       }
 
       const currentList = currentEmployees || [];
+      const excelNameSet = new Set(excelEmployees.map((employee) => employee.name));
+      const currentNameSet = new Set(currentList.map((employee) => cleanEmployeeName(employee.name)));
 
-      const excelNameSet = new Set(
-        excelEmployees.map((employee) => employee.name)
-      );
+      const toAdd = excelEmployees.filter((employee) => !currentNameSet.has(employee.name));
+      const toDelete = currentList.filter((employee) => !excelNameSet.has(cleanEmployeeName(employee.name)));
 
-      const currentNameSet = new Set(
-        currentList.map((employee) => cleanEmployeeName(employee.name))
-      );
-
-      const toAdd = excelEmployees.filter(
-        (employee) => !currentNameSet.has(employee.name)
-      );
-
-      const toDelete = currentList.filter(
-        (employee) => !excelNameSet.has(cleanEmployeeName(employee.name))
-      );
-
-      const toUpdateGender = currentList.filter((employee) => {
+      const toUpdate = currentList.filter((employee) => {
         const cleanName = cleanEmployeeName(employee.name);
         const match = excelEmployees.find((item) => item.name === cleanName);
+        if (!match) return false;
 
-        return match && match.gender && !employee.gender;
+        return (
+          (match.gender || null) !== (employee.gender || null) ||
+          (match.role || null) !== (employee.role || null)
+        );
       });
 
       setSyncPreview({
@@ -117,7 +112,7 @@ export default function Employees() {
         excelEmployees,
         toAdd,
         toDelete,
-        toUpdateGender,
+        toUpdate,
       });
     } catch (error) {
       console.error('Excel read error:', error);
@@ -135,7 +130,7 @@ export default function Employees() {
       `File: ${syncPreview.fileName}\n` +
       `Add: ${syncPreview.toAdd.length}\n` +
       `Delete: ${syncPreview.toDelete.length}\n` +
-      `Gender update: ${syncPreview.toUpdateGender.length}\n\n` +
+      `Update Role/Gender: ${syncPreview.toUpdate.length}\n\n` +
       `Continue?`
     );
 
@@ -149,6 +144,7 @@ export default function Employees() {
           name: employee.name,
           active: true,
           gender: employee.gender || null,
+          role: employee.role || 'LW',
         }))
       );
 
@@ -176,16 +172,17 @@ export default function Employees() {
       }
     }
 
-    for (const employee of syncPreview.toUpdateGender) {
+    for (const employee of syncPreview.toUpdate) {
       const cleanName = cleanEmployeeName(employee.name);
-      const match = syncPreview.excelEmployees.find(
-        (item) => item.name === cleanName
-      );
+      const match = syncPreview.excelEmployees.find((item) => item.name === cleanName);
 
-      if (match?.gender) {
+      if (match) {
         await supabase
           .from('employees')
-          .update({ gender: match.gender })
+          .update({
+            gender: match.gender || null,
+            role: match.role || 'LW',
+          })
           .eq('id', employee.id);
       }
     }
@@ -215,6 +212,7 @@ export default function Employees() {
       name: cleanName,
       active: true,
       gender: gender || null,
+      role: role || 'LW',
     });
 
     if (error) {
@@ -225,6 +223,7 @@ export default function Employees() {
 
     setName('');
     setGender('');
+    setRole('LW');
     await loadEmployees();
   };
 
@@ -261,15 +260,15 @@ export default function Employees() {
     await loadEmployees();
   };
 
-  const updateEmployeeGender = async (id, nextGender) => {
+  const updateEmployeeField = async (id, field, value) => {
     const { error } = await supabase
       .from('employees')
-      .update({ gender: nextGender || null })
+      .update({ [field]: value || null })
       .eq('id', id);
 
     if (error) {
-      console.error('Update employee gender error:', error);
-      alert('Unable to update employee gender.');
+      console.error(`Update employee ${field} error:`, error);
+      alert(`Unable to update employee ${field}.`);
       return;
     }
 
@@ -282,7 +281,7 @@ export default function Employees() {
 
   return (
     <div style={pageStyle}>
-      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
         <button onClick={() => navigate('/home')} style={backButtonStyle}>
           ← Back to Dashboard
         </button>
@@ -290,23 +289,12 @@ export default function Employees() {
         <div style={headerStyle}>
           <div>
             <h1 style={titleStyle}>Employees</h1>
-
-            <p style={subtitleStyle}>
-              Employee list connected to Supabase.
-            </p>
+            <p style={subtitleStyle}>Employee list connected to Supabase with role and gender.</p>
 
             <div style={counterStyle}>
-              <span style={counterItemStyle}>
-                Total: <strong>{totalEmployees}</strong>
-              </span>
-
-              <span style={{ ...counterItemStyle, color: '#86efac' }}>
-                Enable: <strong>{enabledEmployees}</strong>
-              </span>
-
-              <span style={{ ...counterItemStyle, color: '#fca5a5' }}>
-                Disable: <strong>{disabledEmployees}</strong>
-              </span>
+              <span style={counterItemStyle}>Total: <strong>{totalEmployees}</strong></span>
+              <span style={{ ...counterItemStyle, color: '#86efac' }}>Enable: <strong>{enabledEmployees}</strong></span>
+              <span style={{ ...counterItemStyle, color: '#fca5a5' }}>Disable: <strong>{disabledEmployees}</strong></span>
             </div>
           </div>
 
@@ -338,61 +326,19 @@ export default function Employees() {
             <div style={previewHeaderStyle}>
               <div>
                 <h2 style={{ margin: 0, color: '#f8fafc' }}>Excel Sync Preview</h2>
-                <p style={{ margin: '6px 0 0', color: '#94a3b8' }}>
-                  File: {syncPreview.fileName}
-                </p>
+                <p style={{ margin: '6px 0 0', color: '#94a3b8' }}>File: {syncPreview.fileName}</p>
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={() => setSyncPreview(null)} style={cancelButtonStyle}>
-                  Cancel
-                </button>
-
-                <button onClick={confirmExcelSync} style={confirmButtonStyle}>
-                  Confirm Sync
-                </button>
+                <button onClick={() => setSyncPreview(null)} style={cancelButtonStyle}>Cancel</button>
+                <button onClick={confirmExcelSync} style={confirmButtonStyle}>Confirm Sync</button>
               </div>
             </div>
 
             <div style={previewGridStyle}>
-              <div style={previewBoxStyle}>
-                <strong style={{ color: '#86efac' }}>
-                  Add: {syncPreview.toAdd.length}
-                </strong>
-
-                <div style={previewListStyle}>
-                  {syncPreview.toAdd.slice(0, 8).map((item) => (
-                    <div key={item.name}>{item.name}</div>
-                  ))}
-                  {syncPreview.toAdd.length > 8 && <div>...</div>}
-                </div>
-              </div>
-
-              <div style={previewBoxStyle}>
-                <strong style={{ color: '#fca5a5' }}>
-                  Delete: {syncPreview.toDelete.length}
-                </strong>
-
-                <div style={previewListStyle}>
-                  {syncPreview.toDelete.slice(0, 8).map((item) => (
-                    <div key={item.id}>{item.name}</div>
-                  ))}
-                  {syncPreview.toDelete.length > 8 && <div>...</div>}
-                </div>
-              </div>
-
-              <div style={previewBoxStyle}>
-                <strong style={{ color: '#38bdf8' }}>
-                  Gender Update: {syncPreview.toUpdateGender.length}
-                </strong>
-
-                <div style={previewListStyle}>
-                  {syncPreview.toUpdateGender.slice(0, 8).map((item) => (
-                    <div key={item.id}>{item.name}</div>
-                  ))}
-                  {syncPreview.toUpdateGender.length > 8 && <div>...</div>}
-                </div>
-              </div>
+              <PreviewBox title={`Add: ${syncPreview.toAdd.length}`} color="#86efac" items={syncPreview.toAdd} />
+              <PreviewBox title={`Delete: ${syncPreview.toDelete.length}`} color="#fca5a5" items={syncPreview.toDelete} />
+              <PreviewBox title={`Update: ${syncPreview.toUpdate.length}`} color="#38bdf8" items={syncPreview.toUpdate} />
             </div>
           </div>
         )}
@@ -404,49 +350,34 @@ export default function Employees() {
             <input
               value={name}
               onChange={(e) => setName(e.target.value.toUpperCase())}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') addEmployee();
-              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') addEmployee(); }}
               placeholder="TYPE EMPLOYEE NAME..."
               style={inputStyle}
             />
 
-            <select
-              value={gender}
-              onChange={(e) => setGender(e.target.value)}
-              style={{ ...inputStyle, flex: '0 0 170px', minWidth: '170px' }}
-            >
+            <select value={role} onChange={(e) => setRole(e.target.value)} style={{ ...inputStyle, flex: '0 0 150px', minWidth: '150px' }}>
+              {ROLE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+
+            <select value={gender} onChange={(e) => setGender(e.target.value)} style={{ ...inputStyle, flex: '0 0 170px', minWidth: '170px' }}>
               <option value="">Gender...</option>
               <option value="F">Female</option>
               <option value="M">Male</option>
             </select>
 
-            <button onClick={addEmployee} style={addButtonStyle}>
-              + Add
-            </button>
+            <button onClick={addEmployee} style={addButtonStyle}>+ Add</button>
           </div>
         </div>
 
         <div style={cardStyle}>
           <label style={labelStyle}>Search</label>
-
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="SEARCH EMPLOYEE..."
-            style={{ ...inputStyle, width: '100%' }}
-          />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="SEARCH EMPLOYEE..." style={{ ...inputStyle, width: '100%' }} />
         </div>
 
         <div style={tableContainerStyle}>
           <div style={tableHeaderStyle}>
-            <span>
-              Employee List ({loading ? 'Loading...' : filteredEmployees.length})
-            </span>
-
-            <button onClick={loadEmployees} style={refreshButtonStyle}>
-              Refresh
-            </button>
+            <span>Employee List ({loading ? 'Loading...' : filteredEmployees.length})</span>
+            <button onClick={loadEmployees} style={refreshButtonStyle}>Refresh</button>
           </div>
 
           {loading ? (
@@ -454,94 +385,62 @@ export default function Employees() {
           ) : filteredEmployees.length === 0 ? (
             <div style={emptyStyle}>No employees found.</div>
           ) : (
-            <table style={tableStyle}>
-              <thead>
-                <tr style={{ backgroundColor: '#0f172a' }}>
-                  <th style={thStyle}>#</th>
-                  <th style={thStyle}>Employee</th>
-                  <th style={thStyle}>Gender</th>
-                  <th style={thStyle}>Status</th>
-                  <th style={thStyle}>Action</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {filteredEmployees.map((employee, index) => (
-                  <tr key={employee.id}>
-                    <td style={tdStyle}>{index + 1}</td>
-
-                    <td style={{
-                      ...tdStyle,
-                      fontWeight: '800',
-                      opacity: employee.active ? 1 : 0.45,
-                    }}>
-                      {employee.name}
-                    </td>
-
-                    <td style={tdStyle}>
-                      <select
-                        value={employee.gender || ''}
-                        onChange={(e) => updateEmployeeGender(employee.id, e.target.value)}
-                        style={genderSelectStyle}
-                      >
-                        <option value="">--</option>
-                        <option value="F">Female</option>
-                        <option value="M">Male</option>
-                      </select>
-                    </td>
-
-                    <td style={tdStyle}>
-                      <span style={{
-                        padding: '5px 10px',
-                        borderRadius: '999px',
-                        fontWeight: '800',
-                        fontSize: '0.75rem',
-                        backgroundColor: employee.active
-                          ? 'rgba(34, 197, 94, 0.12)'
-                          : 'rgba(239, 68, 68, 0.12)',
-                        color: employee.active ? '#86efac' : '#fca5a5',
-                        border: employee.active
-                          ? '1px solid rgba(34, 197, 94, 0.35)'
-                          : '1px solid rgba(239, 68, 68, 0.35)',
-                      }}>
-                        {employee.active ? 'Enable' : 'Disable'}
-                      </span>
-                    </td>
-
-                    <td style={tdStyle}>
-                      <div style={{
-                        display: 'flex',
-                        gap: '8px',
-                        justifyContent: 'center',
-                        flexWrap: 'wrap',
-                      }}>
-                        <button
-                          onClick={() => toggleEmployee(employee.id, employee.active)}
-                          style={{
-                            ...smallButtonStyle,
-                            color: employee.active ? '#fbbf24' : '#86efac',
-                            borderColor: employee.active ? '#fbbf24' : '#86efac',
-                          }}
-                        >
-                          {employee.active ? 'Disable' : 'Enable'}
-                        </button>
-
-                        <button
-                          onClick={() => deleteEmployee(employee.id)}
-                          style={{
-                            ...smallButtonStyle,
-                            color: '#fca5a5',
-                            borderColor: '#fca5a5',
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr style={{ backgroundColor: '#0f172a' }}>
+                    <th style={thStyle}>#</th>
+                    <th style={thStyle}>Employee</th>
+                    <th style={thStyle}>Role</th>
+                    <th style={thStyle}>Gender</th>
+                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+
+                <tbody>
+                  {filteredEmployees.map((employee, index) => (
+                    <tr key={employee.id}>
+                      <td style={tdStyle}>{index + 1}</td>
+                      <td style={{ ...tdStyle, fontWeight: '800', opacity: employee.active ? 1 : 0.45 }}>{employee.name}</td>
+                      <td style={tdStyle}>
+                        <select value={employee.role || 'LW'} onChange={(e) => updateEmployeeField(employee.id, 'role', e.target.value)} style={selectStyle}>
+                          {ROLE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </td>
+                      <td style={tdStyle}>
+                        <select value={employee.gender || ''} onChange={(e) => updateEmployeeField(employee.id, 'gender', e.target.value)} style={selectStyle}>
+                          <option value="">--</option>
+                          <option value="F">Female</option>
+                          <option value="M">Male</option>
+                        </select>
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{
+                          padding: '5px 10px',
+                          borderRadius: '999px',
+                          fontWeight: '800',
+                          fontSize: '0.75rem',
+                          backgroundColor: employee.active ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                          color: employee.active ? '#86efac' : '#fca5a5',
+                          border: employee.active ? '1px solid rgba(34, 197, 94, 0.35)' : '1px solid rgba(239, 68, 68, 0.35)',
+                        }}>
+                          {employee.active ? 'Enable' : 'Disable'}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button onClick={() => toggleEmployee(employee.id, employee.active)} style={{ ...smallButtonStyle, color: employee.active ? '#fbbf24' : '#86efac', borderColor: employee.active ? '#fbbf24' : '#86efac' }}>
+                            {employee.active ? 'Disable' : 'Enable'}
+                          </button>
+                          <button onClick={() => deleteEmployee(employee.id)} style={{ ...smallButtonStyle, color: '#fca5a5', borderColor: '#fca5a5' }}>Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
@@ -549,236 +448,43 @@ export default function Employees() {
   );
 }
 
-const pageStyle = {
-  backgroundColor: '#0f172a',
-  color: '#f8fafc',
-  minHeight: '100vh',
-  fontFamily: 'system-ui, sans-serif',
-  padding: '40px',
-};
+function PreviewBox({ title, color, items }) {
+  return (
+    <div style={previewBoxStyle}>
+      <strong style={{ color }}>{title}</strong>
+      <div style={previewListStyle}>
+        {items.slice(0, 8).map((item) => <div key={item.id || item.name}>{item.name}</div>)}
+        {items.length > 8 && <div>...</div>}
+      </div>
+    </div>
+  );
+}
 
-const backButtonStyle = {
-  backgroundColor: '#1e293b',
-  color: '#fff',
-  border: '1px solid #334155',
-  padding: '10px 16px',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  marginBottom: '28px',
-  fontWeight: '800',
-};
-
-const headerStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '24px',
-  borderBottom: '1px solid #334155',
-  paddingBottom: '20px',
-  gap: '16px',
-};
-
-const titleStyle = {
-  margin: 0,
-  color: '#38bdf8',
-  fontSize: '2rem',
-};
-
-const subtitleStyle = {
-  color: '#94a3b8',
-  marginTop: '6px',
-};
-
-const counterStyle = {
-  display: 'flex',
-  gap: '12px',
-  marginTop: '12px',
-  flexWrap: 'wrap',
-};
-
-const counterItemStyle = {
-  backgroundColor: '#1e293b',
-  border: '1px solid #334155',
-  color: '#cbd5e1',
-  padding: '6px 10px',
-  borderRadius: '999px',
-  fontSize: '0.78rem',
-  fontWeight: '800',
-};
-
-const syncButtonStyle = {
-  backgroundColor: '#38bdf8',
-  color: '#0f172a',
-  border: 'none',
-  borderRadius: '8px',
-  padding: '12px 16px',
-  fontWeight: '900',
-};
-
-const previewCardStyle = {
-  backgroundColor: '#1e293b',
-  border: '1px solid #38bdf8',
-  borderRadius: '14px',
-  padding: '18px',
-  marginBottom: '18px',
-};
-
-const previewHeaderStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  gap: '14px',
-  marginBottom: '16px',
-};
-
-const previewGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-  gap: '12px',
-};
-
-const previewBoxStyle = {
-  backgroundColor: '#0f172a',
-  border: '1px solid #334155',
-  borderRadius: '10px',
-  padding: '12px',
-};
-
-const previewListStyle = {
-  color: '#cbd5e1',
-  fontSize: '0.78rem',
-  marginTop: '8px',
-  lineHeight: 1.6,
-  maxHeight: '150px',
-  overflow: 'auto',
-};
-
-const cancelButtonStyle = {
-  backgroundColor: '#334155',
-  color: '#f8fafc',
-  border: 'none',
-  borderRadius: '8px',
-  padding: '10px 12px',
-  fontWeight: '900',
-  cursor: 'pointer',
-};
-
-const confirmButtonStyle = {
-  backgroundColor: '#22c55e',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '8px',
-  padding: '10px 12px',
-  fontWeight: '900',
-  cursor: 'pointer',
-};
-
-const cardStyle = {
-  backgroundColor: '#1e293b',
-  border: '1px solid #334155',
-  borderRadius: '14px',
-  padding: '18px',
-  marginBottom: '18px',
-};
-
-const labelStyle = {
-  display: 'block',
-  color: '#cbd5e1',
-  fontSize: '0.85rem',
-  fontWeight: '800',
-  marginBottom: '8px',
-};
-
-const inputStyle = {
-  flex: 1,
-  minWidth: '260px',
-  backgroundColor: '#0f172a',
-  border: '1px solid #334155',
-  color: '#f8fafc',
-  padding: '12px',
-  borderRadius: '8px',
-  outline: 'none',
-  fontWeight: '700',
-};
-
-const addButtonStyle = {
-  backgroundColor: '#22c55e',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '8px',
-  padding: '12px 18px',
-  fontWeight: '900',
-  cursor: 'pointer',
-};
-
-const refreshButtonStyle = {
-  backgroundColor: '#0f172a',
-  color: '#38bdf8',
-  border: '1px solid #334155',
-  borderRadius: '8px',
-  padding: '8px 12px',
-  fontWeight: '900',
-  cursor: 'pointer',
-};
-
-const tableContainerStyle = {
-  backgroundColor: '#1e293b',
-  border: '1px solid #334155',
-  borderRadius: '14px',
-  overflow: 'hidden',
-};
-
-const tableHeaderStyle = {
-  padding: '16px 18px',
-  borderBottom: '1px solid #334155',
-  fontWeight: '900',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  gap: '12px',
-};
-
-const tableStyle = {
-  width: '100%',
-  borderCollapse: 'collapse',
-};
-
-const thStyle = {
-  padding: '13px',
-  color: '#cbd5e1',
-  fontSize: '0.82rem',
-  textAlign: 'center',
-};
-
-const tdStyle = {
-  padding: '13px',
-  borderTop: '1px solid #334155',
-  color: '#f8fafc',
-  textAlign: 'center',
-};
-
-const smallButtonStyle = {
-  backgroundColor: 'transparent',
-  border: '1px solid',
-  borderRadius: '8px',
-  padding: '7px 10px',
-  fontWeight: '900',
-  cursor: 'pointer',
-};
-
-const genderSelectStyle = {
-  backgroundColor: '#0f172a',
-  color: '#f8fafc',
-  border: '1px solid #334155',
-  borderRadius: '8px',
-  padding: '7px 10px',
-  fontWeight: '800',
-  outline: 'none',
-};
-
-const emptyStyle = {
-  padding: '28px',
-  textAlign: 'center',
-  color: '#94a3b8',
-  fontWeight: '700',
-};
+const pageStyle = { backgroundColor: '#0f172a', color: '#f8fafc', minHeight: '100vh', fontFamily: 'system-ui, sans-serif', padding: '40px' };
+const backButtonStyle = { backgroundColor: '#1e293b', color: '#fff', border: '1px solid #334155', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', marginBottom: '28px', fontWeight: '800' };
+const headerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid #334155', paddingBottom: '20px', gap: '16px', flexWrap: 'wrap' };
+const titleStyle = { margin: 0, color: '#38bdf8', fontSize: '2rem' };
+const subtitleStyle = { color: '#94a3b8', marginTop: '6px' };
+const counterStyle = { display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' };
+const counterItemStyle = { backgroundColor: '#1e293b', border: '1px solid #334155', color: '#cbd5e1', padding: '6px 10px', borderRadius: '999px', fontSize: '0.78rem', fontWeight: '800' };
+const syncButtonStyle = { backgroundColor: '#38bdf8', color: '#0f172a', border: 'none', borderRadius: '8px', padding: '12px 16px', fontWeight: '900' };
+const previewCardStyle = { backgroundColor: '#1e293b', border: '1px solid #38bdf8', borderRadius: '14px', padding: '18px', marginBottom: '18px' };
+const previewHeaderStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', marginBottom: '16px', flexWrap: 'wrap' };
+const previewGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' };
+const previewBoxStyle = { backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '10px', padding: '12px' };
+const previewListStyle = { color: '#cbd5e1', fontSize: '0.78rem', marginTop: '8px', lineHeight: 1.6, maxHeight: '150px', overflow: 'auto' };
+const cancelButtonStyle = { backgroundColor: '#334155', color: '#f8fafc', border: 'none', borderRadius: '8px', padding: '10px 12px', fontWeight: '900', cursor: 'pointer' };
+const confirmButtonStyle = { backgroundColor: '#22c55e', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 12px', fontWeight: '900', cursor: 'pointer' };
+const cardStyle = { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '18px', marginBottom: '18px' };
+const labelStyle = { display: 'block', color: '#cbd5e1', fontSize: '0.85rem', fontWeight: '800', marginBottom: '8px' };
+const inputStyle = { flex: 1, minWidth: '220px', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', padding: '12px', borderRadius: '8px', outline: 'none', fontWeight: '700', boxSizing: 'border-box' };
+const addButtonStyle = { backgroundColor: '#22c55e', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 18px', fontWeight: '900', cursor: 'pointer' };
+const refreshButtonStyle = { backgroundColor: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', fontWeight: '900', cursor: 'pointer' };
+const tableContainerStyle = { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '14px', overflow: 'hidden' };
+const tableHeaderStyle = { padding: '16px 18px', borderBottom: '1px solid #334155', fontWeight: '900', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' };
+const tableStyle = { width: '100%', borderCollapse: 'collapse', minWidth: '850px' };
+const thStyle = { color: '#94a3b8', padding: '12px', fontSize: '0.8rem', textAlign: 'center', borderBottom: '1px solid #334155' };
+const tdStyle = { padding: '12px', borderBottom: '1px solid #334155', textAlign: 'center', color: '#e2e8f0' };
+const selectStyle = { backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', borderRadius: '8px', padding: '8px', fontWeight: '800' };
+const emptyStyle = { padding: '28px', textAlign: 'center', color: '#94a3b8', fontWeight: '800' };
+const smallButtonStyle = { backgroundColor: 'transparent', border: '1px solid', borderRadius: '8px', padding: '7px 10px', fontWeight: '900', cursor: 'pointer' };

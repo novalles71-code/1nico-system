@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase';
 const defaultPlasticData = {
   pcsPerFullRoll: '',
   fullRollsRemaining: '',
-  totalGoodBagsProduced: '',
   batchCount: '',
 };
 
@@ -82,14 +81,6 @@ export default function PlasticInventorySingleLine({
 
   const totalLO = fullRollsTotal + rollPlasticLO;
 
-  const usedQty = start + fullRollsTotal - totalLO;
-
-  const rejects = usedQty - num(plasticData.totalGoodBagsProduced);
-
-  const countWarning =
-    num(plasticData.totalGoodBagsProduced) > 0 &&
-    usedQty < num(plasticData.totalGoodBagsProduced);
-
   const saveState = async (newLeftOver) => {
     const { error } = await supabase.from('material_inventory_state').upsert(
       {
@@ -146,7 +137,6 @@ export default function PlasticInventorySingleLine({
             {[
               ['pcsPerFullRoll', 'Pcs per Full Roll'],
               ['fullRollsRemaining', 'Full Rolls Remaining'],
-              ['totalGoodBagsProduced', 'Total Good Bags Produced'],
             ].map(([field, label]) => (
               <div key={field}>
                 <label style={styles.label}>{label}</label>
@@ -190,16 +180,6 @@ export default function PlasticInventorySingleLine({
                 />
 
                 <div style={styles.resultBox}>
-                  <div style={styles.resultRow}>
-                    <span>Start</span>
-                    <b>{format(start)}</b>
-                  </div>
-
-                  <div style={styles.resultRow}>
-                    <span>Printed</span>
-                    <b>{format(batch)}</b>
-                  </div>
-
                   <div style={styles.resultRowLast}>
                     <span>Roll Plastic L/O</span>
                     <b>{format(rollPlasticLO)}</b>
@@ -231,40 +211,6 @@ export default function PlasticInventorySingleLine({
               <b style={styles.summaryValue}>{format(totalLO)}</b>
             </div>
           </div>
-
-          <div style={styles.finalGrid}>
-            <div style={styles.usedCard}>
-              <span style={styles.summaryLabel}>Used QTY</span>
-              <b style={{ ...styles.summaryValue, color: '#1d4ed8' }}>
-                {format(usedQty)}
-              </b>
-            </div>
-
-            <div
-              style={{
-                ...styles.rejectCard,
-                backgroundColor: countWarning ? '#fef2f2' : '#f0fdf4',
-                borderColor: countWarning ? '#fecaca' : '#bbf7d0',
-              }}
-            >
-              <span style={styles.summaryLabel}>Rejects</span>
-
-              <b
-                style={{
-                  ...styles.summaryValue,
-                  color: countWarning ? '#dc2626' : '#15803d',
-                }}
-              >
-                {format(rejects)}
-              </b>
-            </div>
-          </div>
-
-          {countWarning && (
-            <div style={styles.countWarning}>
-              Something is wrong with the count. Please review it again.
-            </div>
-          )}
 
           <div style={styles.resetRow}>
             <button onClick={reset} disabled={saving} style={styles.resetButton}>

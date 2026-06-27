@@ -2,10 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 const defaultPlasticData = {
-  todaysStartingQty: '',
   pcsPerFullRoll: '',
   fullRollsRemaining: '',
-  totalGoodBagsProduced: '',
   lines: {
     L1: { startingRollQty: '', batchCount: '' },
     L2: { startingRollQty: '', batchCount: '' },
@@ -126,12 +124,6 @@ export default function PlasticInventory() {
 
   const linesLOTotal = results.reduce((sum, item) => sum + item.leftOver, 0);
   const totalLO = fullRollsTotal + linesLOTotal;
-  const usedQty = num(plasticData.todaysStartingQty) - totalLO;
-  const rejects = usedQty - num(plasticData.totalGoodBagsProduced);
-
-  const countWarning =
-    num(plasticData.totalGoodBagsProduced) > 0 &&
-    usedQty < num(plasticData.totalGoodBagsProduced);
 
   const saveLineState = async (lineName, leftOver) => {
     const { error } = await supabase.from('material_inventory_state').upsert(
@@ -198,10 +190,8 @@ export default function PlasticInventory() {
         <div style={styles.body}>
           <div style={styles.topGrid}>
             {[
-              ['todaysStartingQty', "Today's Starting QTY"],
               ['pcsPerFullRoll', 'Pcs per Full Roll'],
               ['fullRollsRemaining', 'Full Rolls Remaining'],
-              ['totalGoodBagsProduced', 'Total Good Bags Produced'],
             ].map(([field, label]) => (
               <div key={field}>
                 <label style={styles.label}>{label}</label>
@@ -250,16 +240,6 @@ export default function PlasticInventory() {
                   />
 
                   <div style={styles.resultBox}>
-                    <div style={styles.resultRow}>
-                      <span>Start</span>
-                      <b>{format(item.start)}</b>
-                    </div>
-
-                    <div style={styles.resultRow}>
-                      <span>Printed</span>
-                      <b>{format(item.printed)}</b>
-                    </div>
-
                     <div style={styles.resultRowLast}>
                       <span>L/O</span>
                       <b>{format(item.leftOver)}</b>
@@ -292,39 +272,6 @@ export default function PlasticInventory() {
               <b style={styles.summaryValue}>{format(totalLO)}</b>
             </div>
           </div>
-
-          <div style={styles.finalGrid}>
-            <div style={styles.usedCard}>
-              <span style={styles.summaryLabel}>Used QTY</span>
-              <b style={{ ...styles.summaryValue, color: '#1d4ed8' }}>
-                {format(usedQty)}
-              </b>
-            </div>
-
-            <div
-              style={{
-                ...styles.rejectCard,
-                backgroundColor: countWarning ? '#fef2f2' : '#f0fdf4',
-                borderColor: countWarning ? '#fecaca' : '#bbf7d0',
-              }}
-            >
-              <span style={styles.summaryLabel}>Rejects</span>
-              <b
-                style={{
-                  ...styles.summaryValue,
-                  color: countWarning ? '#dc2626' : '#15803d',
-                }}
-              >
-                {format(rejects)}
-              </b>
-            </div>
-          </div>
-
-          {countWarning && (
-            <div style={styles.countWarning}>
-              Something is wrong with the count. Please review it again.
-            </div>
-          )}
 
           <div style={styles.resetRow}>
             <button onClick={reset} disabled={saving} style={styles.resetButton}>
