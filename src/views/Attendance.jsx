@@ -143,6 +143,10 @@ export default function Attendance() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedNames, setSelectedNames] = useState([]);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth <= 760;
+  });
 
   const todayName = DAYS[Math.max(0, (new Date().getDay() || 7) - 1)] || 'Monday';
   const [entryDay, setEntryDay] = useState(todayName);
@@ -150,6 +154,7 @@ export default function Attendance() {
   const [entryRole, setEntryRole] = useState('S1');
   const [timeIn, setTimeIn] = useState(SHIFT_PRESETS.Day.timeIn);
   const [timeOut, setTimeOut] = useState(SHIFT_PRESETS.Day.timeOut);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const getDayDate = (index) => {
     const d = new Date(monday);
@@ -236,6 +241,13 @@ export default function Attendance() {
   useEffect(() => {
     loadEmployees();
     loadAvailableWeeks();
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 760);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   useEffect(() => {
@@ -356,6 +368,58 @@ export default function Attendance() {
     setSearch('');
     setSaving(false);
     alert('Attendance saved.');
+  };
+
+  const startEditRecord = (record) => {
+    setEditingRecord({
+      id: record.id,
+      name: record.name,
+      timeIn: record.timeIn || '',
+      timeOut: record.timeOut || '',
+      role: normalizeRole(record.role || 'S1'),
+      day: entryDay,
+    });
+  };
+
+  const closeEditRecord = () => {
+    setEditingRecord(null);
+  };
+
+  const updateRecord = async () => {
+    if (!editingRecord?.id) return;
+
+    const finalTimeIn = normalizeTimeValue(editingRecord.timeIn);
+    const finalTimeOut = normalizeTimeValue(editingRecord.timeOut);
+    const finalRole = normalizeRole(editingRecord.role);
+
+    if (!finalTimeIn || !finalTimeOut || !finalRole) {
+      alert('Time In, Time Out and Role are required.');
+      return;
+    }
+
+    setSaving(true);
+
+    const { error } = await supabase
+      .from('attendance_records')
+      .update({
+        time_in: finalTimeIn,
+        time_out: finalTimeOut,
+        role: finalRole,
+        system: 'S1',
+      })
+      .eq('id', editingRecord.id);
+
+    if (error) {
+      console.error('Update record error:', error);
+      alert('Unable to update attendance record.');
+      setSaving(false);
+      return;
+    }
+
+    setEditingRecord(null);
+    await loadWeeklyAttendance();
+    await loadAvailableWeeks();
+    setSaving(false);
   };
 
   const deleteRecord = async (id) => {
@@ -814,11 +878,17 @@ export default function Attendance() {
         </div>
 
         {activeView === 'daily' && (
-          <div style={styles.grid}>
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>Daily Entry</h2>
+          <div style={isMobile ? styles.dailyMobileWrap : styles.dailyDesktopWrap}>
+            <div style={styles.mobileEntryCard}>
+              <div style={styles.dailyHeaderRow}>
+                <div>
+                  <h2 style={styles.cardTitle}>Daily Entry</h2>
+                  <p style={styles.helperText}>Choose the setup once, tap employees, then save.</p>
+                </div>
+                <div style={styles.selectedBadge}>{selectedEmployees.length} selected</div>
+              </div>
 
-              <div style={styles.formGrid}>
+              <div style={styles.mobileControlsGrid}>
                 <Field label="Day">
                   <select value={entryDay} onChange={(e) => setEntryDay(e.target.value)} style={styles.input}>
                     {DAYS.map((day) => <option key={day} value={day}>{day}</option>)}
@@ -832,6 +902,12 @@ export default function Attendance() {
                   </select>
                 </Field>
 
+                <Field label="Role">
+                  <select value={entryRole} onChange={(e) => setEntryRole(e.target.value)} style={styles.input}>
+                    {ENTRY_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+                  </select>
+                </Field>
+
                 <Field label="Time In">
                   <input value={timeIn} onChange={(e) => setTimeIn(e.target.value)} onBlur={() => setTimeIn(normalizeTimeValue(timeIn))} style={styles.input} />
                 </Field>
@@ -839,15 +915,9 @@ export default function Attendance() {
                 <Field label="Time Out">
                   <input value={timeOut} onChange={(e) => setTimeOut(e.target.value)} onBlur={() => setTimeOut(normalizeTimeValue(timeOut))} style={styles.input} />
                 </Field>
-
-                <Field label="Role">
-                  <select value={entryRole} onChange={(e) => setEntryRole(e.target.value)} style={styles.input}>
-                    {ENTRY_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
-                  </select>
-                </Field>
               </div>
 
-              <div style={styles.searchRow}>
+              <div style={styles.searchRowMobile}>
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -857,54 +927,130 @@ export default function Attendance() {
                 <button onClick={clearSelected} style={styles.secondaryButton}>Clear</button>
               </div>
 
-              <div style={styles.employeeList}>
-                {filteredEmployees.map((employee) => {
+              {selectedEmployees.length > 0 && (
+                <div style={styles.selectedStrip}>
+                  {selectedEmployees.map((employee) => (
+                    <button
+                      key={employee.id || employee.name}
+                      onClick={() => toggleSelectedEmployee(employee.name)}
+                      style={styles.selectedMiniChip}
+                    >
+                      {employee.name} ×
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div style={styles.employeeCardList}>
+                {filteredEmployees.length === 0 ? (
+                  <div style={styles.empty}>No employees found.</div>
+                ) : filteredEmployees.map((employee) => {
                   const cleanName = normalizeName(employee.name);
                   const selected = selectedNames.includes(cleanName);
                   return (
                     <button
                       key={employee.id || cleanName}
                       onClick={() => toggleSelectedEmployee(cleanName)}
-                      style={selected ? styles.employeeChipSelected : styles.employeeChip}
+                      style={selected ? styles.employeeTapCardSelected : styles.employeeTapCard}
                     >
-                      {employee.name}
+                      <span>{employee.name}</span>
+                      <span style={selected ? styles.checkSelected : styles.checkBox}>{selected ? '✓' : ''}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <div style={styles.card}>
-              <h2 style={styles.cardTitle}>Selected ({selectedEmployees.length})</h2>
-
-              <div style={styles.selectedList}>
-                {selectedEmployees.length === 0 ? (
-                  <div style={styles.empty}>Select employees from the list.</div>
-                ) : selectedEmployees.map((employee) => (
-                  <div key={employee.id || employee.name} style={styles.selectedItem}>
-                    <span>{employee.name}</span>
-                    <button onClick={() => toggleSelectedEmployee(employee.name)} style={styles.removeButton}>Remove</button>
-                  </div>
-                ))}
+            <div style={styles.mobileEntryCard}>
+              <div style={styles.recordsHeaderRow}>
+                <h3 style={styles.sectionTitle}>Today's Records</h3>
+                <span style={styles.smallMuted}>{entryDay}</span>
               </div>
 
-              <button onClick={saveDailyEntry} disabled={saving || selectedEmployees.length === 0} style={styles.saveButton}>
-                {saving ? 'Saving...' : `Save ${selectedEmployees.length} Employees`}
-              </button>
-
-              <h3 style={styles.sectionTitle}>{entryDay} Saved</h3>
-              <div style={styles.savedList}>
+              <div style={styles.savedListMobile}>
                 {savedForSelectedDay.length === 0 ? (
-                  <div style={styles.empty}>No records saved for this day.</div>
+                  <div style={styles.empty}>No employees saved for this day.</div>
                 ) : savedForSelectedDay.map((record) => (
-                  <div key={record.id} style={styles.savedItem}>
+                  <div key={record.id} style={styles.savedItemMobile}>
                     <div>
                       <b>{record.name}</b>
                       <div style={styles.savedMeta}>{record.timeIn} - {record.timeOut} | {record.role}</div>
                     </div>
-                    <button onClick={() => deleteRecord(record.id)} style={styles.removeButton}>Delete</button>
+                    <div style={styles.recordActions}>
+                      <button onClick={() => startEditRecord(record)} style={styles.editButton}>Edit</button>
+                      <button onClick={() => deleteRecord(record.id)} style={styles.removeButton}>Delete</button>
+                    </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div style={isMobile ? styles.stickySaveBar : styles.desktopSaveBar}>
+              <div style={styles.saveBarText}>
+                <b>{selectedEmployees.length}</b> selected
+                <span style={styles.saveBarSub}> {entryDay} • {entryShift} • {entryRole} • {timeIn}-{timeOut}</span>
+              </div>
+              <button
+                onClick={saveDailyEntry}
+                disabled={saving || selectedEmployees.length === 0}
+                style={{
+                  ...styles.saveButtonCompact,
+                  opacity: saving || selectedEmployees.length === 0 ? 0.55 : 1,
+                  cursor: saving || selectedEmployees.length === 0 ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {saving ? 'Saving...' : `Save ${selectedEmployees.length}`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {editingRecord && (
+          <div style={styles.modalOverlay}>
+            <div style={styles.editModal}>
+              <div style={styles.modalHeader}>
+                <div>
+                  <h2 style={styles.modalTitle}>Edit Record</h2>
+                  <p style={styles.modalSubtitle}>{editingRecord.name}</p>
+                </div>
+                <button onClick={closeEditRecord} style={styles.modalCloseButton}>×</button>
+              </div>
+
+              <div style={styles.editGrid}>
+                <Field label="Role">
+                  <select
+                    value={editingRecord.role}
+                    onChange={(e) => setEditingRecord((prev) => ({ ...prev, role: e.target.value }))}
+                    style={styles.input}
+                  >
+                    {ENTRY_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+                  </select>
+                </Field>
+
+                <Field label="Time In">
+                  <input
+                    value={editingRecord.timeIn}
+                    onChange={(e) => setEditingRecord((prev) => ({ ...prev, timeIn: e.target.value }))}
+                    onBlur={() => setEditingRecord((prev) => ({ ...prev, timeIn: normalizeTimeValue(prev.timeIn) }))}
+                    style={styles.input}
+                  />
+                </Field>
+
+                <Field label="Time Out">
+                  <input
+                    value={editingRecord.timeOut}
+                    onChange={(e) => setEditingRecord((prev) => ({ ...prev, timeOut: e.target.value }))}
+                    onBlur={() => setEditingRecord((prev) => ({ ...prev, timeOut: normalizeTimeValue(prev.timeOut) }))}
+                    style={styles.input}
+                  />
+                </Field>
+              </div>
+
+              <div style={styles.modalActions}>
+                <button onClick={closeEditRecord} style={styles.cancelEditButton}>Cancel</button>
+                <button onClick={updateRecord} disabled={saving} style={styles.updateButton}>
+                  {saving ? 'Updating...' : 'Update Record'}
+                </button>
               </div>
             </div>
           </div>
@@ -1162,6 +1308,22 @@ const styles = {
     fontWeight: '800',
     cursor: 'pointer',
   },
+  editButton: {
+    backgroundColor: 'transparent',
+    color: '#38bdf8',
+    border: '1px solid #38bdf8',
+    borderRadius: '8px',
+    padding: '6px 8px',
+    fontWeight: '800',
+    cursor: 'pointer',
+  },
+  recordActions: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
   sectionTitle: {
     color: '#38bdf8',
     margin: '8px 0 10px',
@@ -1262,5 +1424,288 @@ const styles = {
     color: '#f8fafc',
     fontWeight: '900',
     textAlign: 'center',
+  },
+
+  dailyMobileWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    paddingBottom: '92px',
+  },
+  dailyDesktopWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    paddingBottom: '80px',
+  },
+  mobileEntryCard: {
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '16px',
+    padding: '16px',
+    boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
+  },
+  dailyHeaderRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: '12px',
+    marginBottom: '14px',
+  },
+  helperText: {
+    margin: '4px 0 0',
+    color: '#94a3b8',
+    fontSize: '0.86rem',
+    fontWeight: '700',
+  },
+  selectedBadge: {
+    backgroundColor: '#0f172a',
+    color: '#38bdf8',
+    border: '1px solid #334155',
+    borderRadius: '999px',
+    padding: '7px 10px',
+    fontSize: '0.78rem',
+    fontWeight: '900',
+    whiteSpace: 'nowrap',
+  },
+  mobileControlsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
+    gap: '10px',
+    marginBottom: '12px',
+  },
+  searchRowMobile: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '12px',
+    alignItems: 'stretch',
+  },
+  selectedStrip: {
+    display: 'flex',
+    gap: '8px',
+    overflowX: 'auto',
+    padding: '2px 0 12px',
+    marginBottom: '4px',
+  },
+  selectedMiniChip: {
+    flex: '0 0 auto',
+    backgroundColor: '#38bdf8',
+    color: '#0f172a',
+    border: '1px solid #38bdf8',
+    borderRadius: '999px',
+    padding: '8px 10px',
+    fontSize: '0.78rem',
+    fontWeight: '900',
+    cursor: 'pointer',
+  },
+  employeeCardList: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+    gap: '9px',
+    maxHeight: '52vh',
+    overflowY: 'auto',
+    paddingRight: '2px',
+  },
+  employeeTapCard: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '10px',
+    textAlign: 'left',
+    backgroundColor: '#0f172a',
+    color: '#f8fafc',
+    border: '1px solid #334155',
+    borderRadius: '12px',
+    padding: '13px 12px',
+    fontWeight: '900',
+    cursor: 'pointer',
+  },
+  employeeTapCardSelected: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '10px',
+    textAlign: 'left',
+    backgroundColor: '#38bdf8',
+    color: '#0f172a',
+    border: '1px solid #38bdf8',
+    borderRadius: '12px',
+    padding: '13px 12px',
+    fontWeight: '900',
+    cursor: 'pointer',
+  },
+  checkBox: {
+    width: '22px',
+    height: '22px',
+    borderRadius: '7px',
+    border: '2px solid #475569',
+    flex: '0 0 auto',
+  },
+  checkSelected: {
+    width: '22px',
+    height: '22px',
+    borderRadius: '7px',
+    border: '2px solid #0f172a',
+    color: '#0f172a',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: '0 0 auto',
+    fontWeight: '900',
+  },
+  recordsHeaderRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  smallMuted: {
+    color: '#94a3b8',
+    fontWeight: '900',
+    fontSize: '0.82rem',
+  },
+  savedListMobile: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    maxHeight: '360px',
+    overflowY: 'auto',
+  },
+  savedItemMobile: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '10px',
+    backgroundColor: '#0f172a',
+    border: '1px solid #334155',
+    borderRadius: '12px',
+    padding: '11px',
+  },
+  stickySaveBar: {
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 50,
+    backgroundColor: '#020617',
+    borderTop: '1px solid #334155',
+    padding: '10px 14px calc(10px + env(safe-area-inset-bottom))',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '10px',
+  },
+  desktopSaveBar: {
+    position: 'sticky',
+    bottom: '12px',
+    zIndex: 20,
+    backgroundColor: '#020617',
+    border: '1px solid #334155',
+    borderRadius: '14px',
+    padding: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    boxShadow: '0 14px 28px rgba(0,0,0,0.28)',
+  },
+  saveBarText: {
+    color: '#f8fafc',
+    fontWeight: '900',
+    minWidth: 0,
+  },
+  saveBarSub: {
+    color: '#94a3b8',
+    fontSize: '0.78rem',
+    fontWeight: '800',
+  },
+  saveButtonCompact: {
+    backgroundColor: '#22c55e',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '12px',
+    padding: '12px 18px',
+    fontWeight: '900',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  modalOverlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 100,
+    backgroundColor: 'rgba(2, 6, 23, 0.78)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '18px',
+  },
+  editModal: {
+    width: '100%',
+    maxWidth: '430px',
+    backgroundColor: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: '18px',
+    padding: '18px',
+    boxShadow: '0 20px 50px rgba(0,0,0,0.45)',
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: '12px',
+    marginBottom: '16px',
+  },
+  modalTitle: {
+    margin: 0,
+    color: '#38bdf8',
+    fontSize: '1.25rem',
+    fontWeight: '900',
+  },
+  modalSubtitle: {
+    margin: '5px 0 0',
+    color: '#f8fafc',
+    fontSize: '0.92rem',
+    fontWeight: '900',
+  },
+  modalCloseButton: {
+    width: '34px',
+    height: '34px',
+    borderRadius: '10px',
+    border: '1px solid #334155',
+    backgroundColor: '#0f172a',
+    color: '#f8fafc',
+    fontSize: '1.25rem',
+    fontWeight: '900',
+    cursor: 'pointer',
+  },
+  editGrid: {
+    display: 'grid',
+    gap: '12px',
+    marginBottom: '16px',
+  },
+  modalActions: {
+    display: 'flex',
+    gap: '10px',
+    justifyContent: 'flex-end',
+  },
+  cancelEditButton: {
+    backgroundColor: '#334155',
+    color: '#f8fafc',
+    border: 'none',
+    borderRadius: '10px',
+    padding: '11px 14px',
+    fontWeight: '900',
+    cursor: 'pointer',
+  },
+  updateButton: {
+    backgroundColor: '#22c55e',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '10px',
+    padding: '11px 14px',
+    fontWeight: '900',
+    cursor: 'pointer',
   },
 };
