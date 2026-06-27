@@ -100,13 +100,34 @@ function roundHours(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+function crossesLunchTime(startMinutes, endMinutes) {
+  if (startMinutes === null || endMinutes === null) return false;
+
+  const lunchMinutes = 12 * 60;
+  let adjustedEnd = endMinutes;
+
+  if (adjustedEnd < startMinutes) {
+    adjustedEnd += 24 * 60;
+  }
+
+  return startMinutes <= lunchMinutes && lunchMinutes < adjustedEnd;
+}
+
 function calculateRecordHours(record) {
   const startMinutes = parseTimeToMinutes(record?.timeIn);
   const endMinutes = parseTimeToMinutes(record?.timeOut);
   if (startMinutes === null || endMinutes === null) return 0;
+
   let totalMinutes = endMinutes - startMinutes;
   if (totalMinutes < 0) totalMinutes += 24 * 60;
-  return totalMinutes / 60;
+
+  let totalHours = totalMinutes / 60;
+
+  if (crossesLunchTime(startMinutes, endMinutes) && !record?.noLunch) {
+    totalHours -= 0.5;
+  }
+
+  return Math.max(0, totalHours);
 }
 
 function normalizeGender(gender) {
@@ -154,6 +175,7 @@ export default function Attendance() {
   const [entryRole, setEntryRole] = useState('S1');
   const [timeIn, setTimeIn] = useState(SHIFT_PRESETS.Day.timeIn);
   const [timeOut, setTimeOut] = useState(SHIFT_PRESETS.Day.timeOut);
+  const [noLunch, setNoLunch] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
 
   const getDayDate = (index) => {
@@ -231,6 +253,7 @@ export default function Attendance() {
         timeOut: normalizeTimeValue(record.time_out || ''),
         role: normalizeRole(record.role || ''),
         system: record.system || 'S1',
+        noLunch: Boolean(record.no_lunch),
       });
     });
 
@@ -349,6 +372,7 @@ export default function Attendance() {
       time_out: finalTimeOut,
       role: finalRole,
       system: 'S1',
+      no_lunch: noLunch,
     }));
 
     const { error: insertError } = await supabase
@@ -377,6 +401,7 @@ export default function Attendance() {
       timeIn: record.timeIn || '',
       timeOut: record.timeOut || '',
       role: normalizeRole(record.role || 'S1'),
+      noLunch: Boolean(record.noLunch),
       day: entryDay,
     });
   };
@@ -406,6 +431,7 @@ export default function Attendance() {
         time_out: finalTimeOut,
         role: finalRole,
         system: 'S1',
+        no_lunch: Boolean(editingRecord.noLunch),
       })
       .eq('id', editingRecord.id);
 
@@ -720,6 +746,7 @@ export default function Attendance() {
     worksheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }];
     worksheet.getColumn(1).width = 34;
     for (let col = 2; col <= 22; col += 1) worksheet.getColumn(col).width = 7.5;
+    worksheet.getColumn(23).width = 14; // Notes column outside the main table
 
     const borderStyle = {
       top: { style: 'medium', color: { argb: 'FF000000' } },
@@ -728,6 +755,8 @@ export default function Attendance() {
       right: { style: 'medium', color: { argb: 'FF000000' } },
     };
     const center = { vertical: 'middle', horizontal: 'center' };
+    const earlyOutFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+    const noLunchFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4B183' } };
 
     worksheet.getRow(1).height = 30;
     worksheet.getCell('A1').value = 'BUILDING 8';
@@ -804,7 +833,11 @@ export default function Attendance() {
 
         const timeOutMinutes = parseTimeToMinutes(record?.timeOut);
         if (timeOutMinutes !== null && timeOutMinutes < 18 * 60) {
-          row.getCell(startCol + 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+          row.getCell(startCol + 1).fill = earlyOutFill;
+        }
+
+        if (record?.noLunch) {
+          row.getCell(startCol + 1).fill = noLunchFill;
         }
 
         for (let offset = 0; offset <= 2; offset += 1) {
@@ -813,10 +846,44 @@ export default function Attendance() {
         }
       });
 
+      const hasNoLunch = DAYS.some((day) => Boolean(person.days?.[day]?.noLunch));
+
+      if (hasNoLunch) {
+        const noteCell = row.getCell(23);
+        noteCell.value = 'NO LUNCH';
+        noteCell.font = { name: 'Calibri', size: 11, bold: true };
+        noteCell.alignment = center;
+        noteCell.fill = noLunchFill;
+        noteCell.border = borderStyle;
+      }
+
       for (let col = 1; col <= 22; col += 1) row.getCell(col).border = borderStyle;
       row.height = 20;
       currentRow += 1;
     });
+
+    currentRow += 2;
+
+    const legendTitleRow = worksheet.getRow(currentRow);
+    legendTitleRow.getCell(1).value = 'COLOR LEGEND';
+    legendTitleRow.getCell(1).font = { name: 'Calibri', size: 11, bold: true };
+    legendTitleRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+    currentRow += 1;
+
+    const earlyLegendRow = worksheet.getRow(currentRow);
+    earlyLegendRow.getCell(1).value = '';
+    earlyLegendRow.getCell(1).fill = earlyOutFill;
+    earlyLegendRow.getCell(1).border = borderStyle;
+    earlyLegendRow.getCell(2).value = 'Employee left before 6:00 PM.';
+    earlyLegendRow.getCell(2).font = { name: 'Calibri', size: 11, bold: true };
+    currentRow += 1;
+
+    const noLunchLegendRow = worksheet.getRow(currentRow);
+    noLunchLegendRow.getCell(1).value = '';
+    noLunchLegendRow.getCell(1).fill = noLunchFill;
+    noLunchLegendRow.getCell(1).border = borderStyle;
+    noLunchLegendRow.getCell(2).value = 'NO LUNCH: 0.5 hour lunch was not deducted.';
+    noLunchLegendRow.getCell(2).font = { name: 'Calibri', size: 11, bold: true };
 
     worksheet.eachRow((row) => {
       row.eachCell({ includeEmpty: true }, (cell) => {
@@ -915,6 +982,18 @@ export default function Attendance() {
                 <Field label="Time Out">
                   <input value={timeOut} onChange={(e) => setTimeOut(e.target.value)} onBlur={() => setTimeOut(normalizeTimeValue(timeOut))} style={styles.input} />
                 </Field>
+
+                <Field label="Lunch">
+                  <label style={styles.checkControl}>
+                    <input
+                      type="checkbox"
+                      checked={noLunch}
+                      onChange={(e) => setNoLunch(e.target.checked)}
+                      style={styles.checkInput}
+                    />
+                    No Lunch
+                  </label>
+                </Field>
               </div>
 
               <div style={styles.searchRowMobile}>
@@ -974,7 +1053,9 @@ export default function Attendance() {
                   <div key={record.id} style={styles.savedItemMobile}>
                     <div>
                       <b>{record.name}</b>
-                      <div style={styles.savedMeta}>{record.timeIn} - {record.timeOut} | {record.role}</div>
+                      <div style={styles.savedMeta}>
+                        {record.timeIn} - {record.timeOut} | {record.role}{record.noLunch ? ' | No Lunch' : ''}
+                      </div>
                     </div>
                     <div style={styles.recordActions}>
                       <button onClick={() => startEditRecord(record)} style={styles.editButton}>Edit</button>
@@ -988,7 +1069,7 @@ export default function Attendance() {
             <div style={isMobile ? styles.stickySaveBar : styles.desktopSaveBar}>
               <div style={styles.saveBarText}>
                 <b>{selectedEmployees.length}</b> selected
-                <span style={styles.saveBarSub}> {entryDay} • {entryShift} • {entryRole} • {timeIn}-{timeOut}</span>
+                <span style={styles.saveBarSub}> {entryDay} • {entryShift} • {entryRole} • {timeIn}-{timeOut}{noLunch ? ' • No Lunch' : ''}</span>
               </div>
               <button
                 onClick={saveDailyEntry}
@@ -1043,6 +1124,18 @@ export default function Attendance() {
                     onBlur={() => setEditingRecord((prev) => ({ ...prev, timeOut: normalizeTimeValue(prev.timeOut) }))}
                     style={styles.input}
                   />
+                </Field>
+
+                <Field label="Lunch">
+                  <label style={styles.checkControl}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingRecord.noLunch)}
+                      onChange={(e) => setEditingRecord((prev) => ({ ...prev, noLunch: e.target.checked }))}
+                      style={styles.checkInput}
+                    />
+                    No Lunch
+                  </label>
                 </Field>
               </div>
 
@@ -1228,6 +1321,26 @@ const styles = {
     padding: '11px',
     outline: 'none',
     fontWeight: '800',
+  },
+  checkControl: {
+    width: '100%',
+    minHeight: '43px',
+    boxSizing: 'border-box',
+    backgroundColor: '#0f172a',
+    color: '#f8fafc',
+    border: '1px solid #334155',
+    borderRadius: '9px',
+    padding: '11px',
+    fontWeight: '900',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    cursor: 'pointer',
+  },
+  checkInput: {
+    width: '18px',
+    height: '18px',
+    cursor: 'pointer',
   },
   searchRow: {
     display: 'flex',
