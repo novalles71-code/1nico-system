@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ClipboardCheck, PackageSearch, Download } from "lucide-react";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { supabase } from "../lib/supabase";
 
 const SYSTEM_LABEL = "Workability";
@@ -198,27 +198,6 @@ export default function Workability() {
     return Math.floor(onHand / qtyPerCase);
   };
 
-  const formatDate = (dateValue) => {
-    if (!dateValue) return "-";
-
-    const date = new Date(dateValue);
-
-    if (Number.isNaN(date.getTime())) return "-";
-
-    return date.toLocaleDateString("en-US");
-  };
-
-  const getFeedstockDates = (inv) => {
-    if (!inv?.lots?.length) return [];
-
-    const dates = inv.lots
-      .map((lot) => lot.ExpirationDate)
-      .filter(Boolean)
-      .map((dateValue) => formatDate(dateValue));
-
-    return Array.from(new Set(dates));
-  };
-
   const getWorkabilitySummary = () => {
     if (!components.length) {
       return {
@@ -251,44 +230,56 @@ export default function Workability() {
     };
   };
 
+  const applyCellStyle = (worksheet, cellAddress, options = {}) => {
+    if (!worksheet[cellAddress]) return;
+
+    worksheet[cellAddress].s = {
+      font: {
+        bold: options.bold || false,
+        sz: options.size || 11,
+      },
+      alignment: {
+        horizontal: options.align || "center",
+        vertical: "center",
+        wrapText: true,
+      },
+      border: options.border
+        ? {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } },
+          }
+        : undefined,
+      fill: options.fill
+        ? {
+            fgColor: { rgb: options.fill },
+          }
+        : undefined,
+    };
+  };
+
   const handleDownloadExcel = () => {
     if (!selectedProduct || !components.length) {
       alert("Select a SKU before downloading.");
       return;
     }
 
-    const summary = getWorkabilitySummary();
-
     const rows = [
       ["Customer", customer],
       ["SKU", selectedProduct.sku],
       ["Description", selectedProduct.description],
-      ["Workability", summary.workability],
-      ["Limiting Material", summary.limitingMaterial],
       [],
-      [
-        "Component",
-        "Description",
-        "Type",
-        "Qty / Case",
-        "Reject Allowed",
-        "Exp. Date",
-        "On Hand",
-        "Cases Possible",
-      ],
+      ["Component", "Description", "Type", "Qty / Case", "On Hand", "Cases Possible"],
       ...components.map((component) => {
         const inv = getInventoryForComponent(component);
-        const type = String(component.type || "").toUpperCase();
-        const isFeedstock = type === "FEEDSTOCK";
 
         return [
           component.component_sku,
           component.component_description || "-",
           component.type || "-",
-          component.qty_per_case || 0,
-          component.reject_percent || "-",
-          isFeedstock ? formatDate(inv?.earliestExpiration) : "-",
-          inv?.totalOnHand ?? 0,
+          Number(component.qty_per_case || 0),
+          Number(inv?.totalOnHand || 0),
           getCasesPossible(component),
         ];
       }),
@@ -299,14 +290,60 @@ export default function Workability() {
 
     worksheet["!cols"] = [
       { wch: 18 },
-      { wch: 42 },
-      { wch: 16 },
-      { wch: 12 },
-      { wch: 16 },
+      { wch: 52 },
+      { wch: 18 },
       { wch: 14 },
-      { wch: 12 },
-      { wch: 16 },
+      { wch: 14 },
+      { wch: 18 },
     ];
+
+    worksheet["!rows"] = [
+      { hpt: 22 },
+      { hpt: 22 },
+      { hpt: 22 },
+      { hpt: 8 },
+      { hpt: 24 },
+    ];
+
+    worksheet["!merges"] = [
+      { s: { r: 0, c: 1 }, e: { r: 0, c: 2 } },
+      { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } },
+      { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } },
+    ];
+
+    ["A1", "A2", "A3"].forEach((cell) => {
+      applyCellStyle(worksheet, cell, {
+        bold: false,
+        align: "left",
+        border: true,
+      });
+    });
+
+    ["B1", "B2", "B3", "C1", "C2", "C3"].forEach((cell) => {
+      applyCellStyle(worksheet, cell, {
+        bold: false,
+        align: "left",
+        border: true,
+      });
+    });
+
+    ["A5", "B5", "C5", "D5", "E5", "F5"].forEach((cell) => {
+      applyCellStyle(worksheet, cell, {
+        bold: false,
+        align: "left",
+        border: true,
+      });
+    });
+
+    for (let row = 6; row <= rows.length; row += 1) {
+      ["A", "B", "C", "D", "E", "F"].forEach((col) => {
+        applyCellStyle(worksheet, `${col}${row}`, {
+          bold: false,
+          align: col === "B" ? "left" : "center",
+          border: true,
+        });
+      });
+    }
 
     XLSX.utils.book_append_sheet(workbook, worksheet, "Workability");
 
@@ -705,10 +742,9 @@ export default function Workability() {
                   <thead>
                     <tr style={{ backgroundColor: "#f1f5f9" }}>
                       <th style={thStyle}>Component</th>
+                      <th style={thStyle}>Description</th>
                       <th style={thStyle}>Type</th>
                       <th style={thStyle}>Qty / Case</th>
-                      <th style={thStyle}>Reject Allowed</th>
-                      <th style={thStyle}>Exp. Date</th>
                       <th style={thStyle}>On Hand</th>
                       <th style={thStyle}>Cases Possible</th>
                     </tr>
@@ -717,19 +753,19 @@ export default function Workability() {
                   <tbody>
                     {!selectedProduct ? (
                       <tr>
-                        <td style={tdStyle} colSpan={7}>
+                        <td style={tdStyle} colSpan={6}>
                           Select a SKU to load BOM components.
                         </td>
                       </tr>
                     ) : loadingComponents ? (
                       <tr>
-                        <td style={tdStyle} colSpan={7}>
+                        <td style={tdStyle} colSpan={6}>
                           Loading BOM components...
                         </td>
                       </tr>
                     ) : components.length === 0 ? (
                       <tr>
-                        <td style={tdStyle} colSpan={7}>
+                        <td style={tdStyle} colSpan={6}>
                           No BOM components loaded for this SKU.
                         </td>
                       </tr>
@@ -738,23 +774,11 @@ export default function Workability() {
                         const inv = getInventoryForComponent(component);
                         const onHand = inv?.totalOnHand ?? 0;
                         const casesPossible = getCasesPossible(component);
-                        const type = String(component.type || "").toUpperCase();
-                        const isFeedstock = type === "FEEDSTOCK";
-                        const feedstockDates = getFeedstockDates(inv);
 
                         return (
                           <tr key={component.id}>
                             <td style={tdStyle}>
                               <strong>{component.component_sku}</strong>
-                              <div
-                                style={{
-                                  color: "#64748b",
-                                  fontSize: "0.78rem",
-                                  marginTop: "4px",
-                                }}
-                              >
-                                {component.component_description || "-"}
-                              </div>
                               {inv?.searchedAs &&
                                 inv.searchedAs !== component.component_sku && (
                                   <div
@@ -770,62 +794,14 @@ export default function Workability() {
                                 )}
                             </td>
 
+                            <td style={tdStyle}>
+                              {component.component_description || "-"}
+                            </td>
                             <td style={tdStyle}>{component.type}</td>
                             <td style={tdStyle}>{component.qty_per_case}</td>
-                            <td style={tdStyle}>{component.reject_percent || "-"}</td>
-
-                            <td style={tdStyle}>
-                              {loadingInventory ? (
-                                "Loading..."
-                              ) : isFeedstock && feedstockDates.length > 0 ? (
-                                <details style={{ position: "relative" }}>
-                                  <summary
-                                    style={{
-                                      cursor: "pointer",
-                                      listStyle: "none",
-                                      color: "#0f172a",
-                                      fontWeight: "900",
-                                    }}
-                                  >
-                                    {formatDate(inv?.earliestExpiration)} ▼
-                                  </summary>
-
-                                  <div
-                                    style={{
-                                      marginTop: "8px",
-                                      backgroundColor: "#fff",
-                                      border: "1px solid #cbd5e1",
-                                      borderRadius: "8px",
-                                      padding: "8px",
-                                      boxShadow: "0 8px 18px rgba(15,23,42,0.12)",
-                                      minWidth: "120px",
-                                    }}
-                                  >
-                                    {feedstockDates.map((date) => (
-                                      <div
-                                        key={date}
-                                        style={{
-                                          padding: "5px 8px",
-                                          borderBottom: "1px solid #e2e8f0",
-                                          fontSize: "0.8rem",
-                                          color: "#334155",
-                                          fontWeight: "800",
-                                        }}
-                                      >
-                                        {date}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </details>
-                              ) : (
-                                "-"
-                              )}
-                            </td>
-
                             <td style={tdStyle}>
                               {loadingInventory ? "Loading..." : onHand}
                             </td>
-
                             <td style={tdStyle}>
                               {loadingInventory ? "Loading..." : casesPossible}
                             </td>
