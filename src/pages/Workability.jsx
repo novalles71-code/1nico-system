@@ -3,7 +3,7 @@ import { ClipboardCheck, PackageSearch } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 const SYSTEM_LABEL = "Workability";
-const INVENTORY_SERVER_URL = "http://10.1.10.370:3001";
+const INVENTORY_SERVER_URL = "http://10.1.3.70:3001";
 
 export default function Workability() {
   const [activeTab, setActiveTab] = useState("Home");
