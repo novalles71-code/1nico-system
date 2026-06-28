@@ -15,6 +15,8 @@ import SuppliesDashboard from './pages/SuppliesDashboard';
 import SuppliesMaster from './pages/SuppliesMaster';
 import SuppliesBuilding from './pages/SuppliesBuilding';
 import ProtectedSuppliesDeviceRoute from "./components/ProtectedSuppliesDeviceRoute";
+import Workability from './pages/Workability';
+import WorkabilityAdmin from './pages/WorkabilityAdmin';
 
 function App() {
   return (
@@ -26,6 +28,7 @@ function App() {
         <Route path="/system-2" element={<System2 />} />
         <Route path="/system-3" element={<System3 />} />
         <Route path="/system-4" element={<System4 />} />
+        <Route path="/workability" element={<Workability />} />
 
         <Route path="/supplies-dashboard" element={<ProtectedAdminRoute><SuppliesDashboard /> </ProtectedAdminRoute>}/>
         <Route path="/supplies-master" element={<ProtectedAdminRoute><SuppliesMaster /></ProtectedAdminRoute>}/>
@@ -86,6 +89,15 @@ function App() {
   element={
     <ProtectedAdminRoute>
       <Supplies />
+    </ProtectedAdminRoute>
+  }
+/>
+
+<Route
+  path="/workability-admin"
+  element={
+    <ProtectedAdminRoute>
+      <WorkabilityAdmin />
     </ProtectedAdminRoute>
   }
 />

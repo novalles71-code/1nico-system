@@ -4,6 +4,7 @@ import {
   Users,
   Database,
   Boxes,
+  ClipboardCheck,
 } from 'lucide-react';
 
 export default function Home() {
@@ -80,6 +81,14 @@ export default function Home() {
       desc: "Manage weekly supplies orders.",
       icon: <Boxes size={40} />,
       path: "/supplies",
+    },
+
+    {
+      id: "workability",
+      title: "WORKABILITY",
+      desc: "BOM, inventory and cases possible.",
+      icon: <ClipboardCheck size={40} />,
+      path: "/workability-admin",
     },
 
   ];
