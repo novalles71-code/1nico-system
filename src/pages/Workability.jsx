@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ClipboardCheck, PackageSearch } from "lucide-react";
+import { ClipboardCheck, PackageSearch, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 
 const SYSTEM_LABEL = "Workability";
@@ -108,7 +109,6 @@ export default function Workability() {
       });
 
       const data = await response.json();
-
       const map = {};
 
       (data.items || []).forEach((item) => {
@@ -198,6 +198,128 @@ export default function Workability() {
     return Math.floor(onHand / qtyPerCase);
   };
 
+  const formatDate = (dateValue) => {
+    if (!dateValue) return "-";
+
+    const date = new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) return "-";
+
+    return date.toLocaleDateString("en-US");
+  };
+
+  const getFeedstockDates = (inv) => {
+    if (!inv?.lots?.length) return [];
+
+    const dates = inv.lots
+      .map((lot) => lot.ExpirationDate)
+      .filter(Boolean)
+      .map((dateValue) => formatDate(dateValue));
+
+    return Array.from(new Set(dates));
+  };
+
+  const getWorkabilitySummary = () => {
+    if (!components.length) {
+      return {
+        workability: 0,
+        limitingMaterial: "-",
+      };
+    }
+
+    const calculated = components.map((component) => ({
+      component,
+      casesPossible: getCasesPossible(component),
+    }));
+
+    const validRows = calculated.filter((row) => row.casesPossible >= 0);
+
+    if (!validRows.length) {
+      return {
+        workability: 0,
+        limitingMaterial: "-",
+      };
+    }
+
+    const limiting = validRows.reduce((lowest, current) => {
+      return current.casesPossible < lowest.casesPossible ? current : lowest;
+    }, validRows[0]);
+
+    return {
+      workability: limiting.casesPossible,
+      limitingMaterial: `${limiting.component.type} - ${limiting.component.component_sku}`,
+    };
+  };
+
+  const handleDownloadExcel = () => {
+    if (!selectedProduct || !components.length) {
+      alert("Select a SKU before downloading.");
+      return;
+    }
+
+    const summary = getWorkabilitySummary();
+
+    const rows = [
+      ["Customer", customer],
+      ["SKU", selectedProduct.sku],
+      ["Description", selectedProduct.description],
+      ["Workability", summary.workability],
+      ["Limiting Material", summary.limitingMaterial],
+      [],
+      [
+        "Component",
+        "Description",
+        "Type",
+        "Qty / Case",
+        "Reject Allowed",
+        "Exp. Date",
+        "On Hand",
+        "Cases Possible",
+      ],
+      ...components.map((component) => {
+        const inv = getInventoryForComponent(component);
+        const type = String(component.type || "").toUpperCase();
+        const isFeedstock = type === "FEEDSTOCK";
+
+        return [
+          component.component_sku,
+          component.component_description || "-",
+          component.type || "-",
+          component.qty_per_case || 0,
+          component.reject_percent || "-",
+          isFeedstock ? formatDate(inv?.earliestExpiration) : "-",
+          inv?.totalOnHand ?? 0,
+          getCasesPossible(component),
+        ];
+      }),
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+
+    worksheet["!cols"] = [
+      { wch: 18 },
+      { wch: 42 },
+      { wch: 16 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 16 },
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Workability");
+
+    const safeSku = String(selectedProduct.sku || "workability").replace(
+      /[^a-zA-Z0-9-_]/g,
+      "_"
+    );
+
+    XLSX.writeFile(workbook, `Workability_${safeSku}.xlsx`);
+  };
+
+  const summary = getWorkabilitySummary();
+
   const tabs = ["Home", "Workability"];
 
   const homeModulesInfo = [
@@ -209,30 +331,36 @@ export default function Workability() {
   ];
 
   return (
-    <div style={{
-      backgroundColor: "#f1f5f9",
-      minHeight: "100vh",
-      fontFamily: "system-ui, sans-serif",
-      margin: 0,
-    }}>
-      <div style={{
-        backgroundColor: "#dc2626",
-        color: "#fff",
-        padding: "14px 24px",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-      }}>
+    <div
+      style={{
+        backgroundColor: "#f1f5f9",
+        minHeight: "100vh",
+        fontFamily: "system-ui, sans-serif",
+        margin: 0,
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "#dc2626",
+          color: "#fff",
+          padding: "14px 24px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{
-            backgroundColor: "#fff",
-            color: "#dc2626",
-            fontWeight: "900",
-            padding: "3px 8px",
-            borderRadius: "4px",
-            fontSize: "0.9rem",
-          }}>
+          <span
+            style={{
+              backgroundColor: "#fff",
+              color: "#dc2626",
+              fontWeight: "900",
+              padding: "3px 8px",
+              borderRadius: "4px",
+              fontSize: "0.9rem",
+            }}
+          >
             1NICO
           </span>
 
@@ -252,13 +380,15 @@ export default function Workability() {
       </div>
 
       <div style={{ padding: "32px 24px", maxWidth: "1200px", margin: "0 auto" }}>
-        <div style={{
-          display: "flex",
-          borderBottom: "1px solid #cbd5e1",
-          marginBottom: "24px",
-          gap: "4px",
-          flexWrap: "wrap",
-        }}>
+        <div
+          style={{
+            display: "flex",
+            borderBottom: "1px solid #cbd5e1",
+            marginBottom: "24px",
+            gap: "4px",
+            flexWrap: "wrap",
+          }}
+        >
           {tabs.map((tab) => (
             <button
               key={tab}
@@ -288,19 +418,23 @@ export default function Workability() {
           ))}
         </div>
 
-        <div style={{
-          backgroundColor: "#fff",
-          padding: "32px",
-          borderRadius: "12px",
-          border: "1px solid #cbd5e1",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-        }}>
+        <div
+          style={{
+            backgroundColor: "#fff",
+            padding: "32px",
+            borderRadius: "12px",
+            border: "1px solid #cbd5e1",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+          }}
+        >
           {activeTab === "Home" && (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-              gap: "24px",
-            }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                gap: "24px",
+              }}
+            >
               {homeModulesInfo.map((mod, i) => (
                 <div
                   key={i}
@@ -318,21 +452,25 @@ export default function Workability() {
                     {mod.icon}
                   </div>
 
-                  <h3 style={{
-                    fontSize: "1.2rem",
-                    fontWeight: "700",
-                    margin: "0 0 8px 0",
-                    color: "#0f172a",
-                  }}>
+                  <h3
+                    style={{
+                      fontSize: "1.2rem",
+                      fontWeight: "700",
+                      margin: "0 0 8px 0",
+                      color: "#0f172a",
+                    }}
+                  >
                     {mod.title}
                   </h3>
 
-                  <p style={{
-                    color: "#64748b",
-                    fontSize: "0.9rem",
-                    margin: 0,
-                    lineHeight: "1.5",
-                  }}>
+                  <p
+                    style={{
+                      color: "#64748b",
+                      fontSize: "0.9rem",
+                      margin: 0,
+                      lineHeight: "1.5",
+                    }}
+                  >
                     {mod.desc}
                   </p>
                 </div>
@@ -342,40 +480,48 @@ export default function Workability() {
 
           {activeTab === "Workability" && (
             <div>
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                marginBottom: "22px",
-              }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  marginBottom: "22px",
+                }}
+              >
                 <PackageSearch size={24} color="#dc2626" />
 
                 <div>
-                  <h2 style={{
-                    margin: 0,
-                    color: "#0f172a",
-                    fontSize: "1.35rem",
-                    fontWeight: "800",
-                  }}>
+                  <h2
+                    style={{
+                      margin: 0,
+                      color: "#0f172a",
+                      fontSize: "1.35rem",
+                      fontWeight: "800",
+                    }}
+                  >
                     Workability Calculator
                   </h2>
 
-                  <p style={{
-                    margin: "4px 0 0 0",
-                    color: "#64748b",
-                    fontSize: "0.9rem",
-                  }}>
+                  <p
+                    style={{
+                      margin: "4px 0 0 0",
+                      color: "#64748b",
+                      fontSize: "0.9rem",
+                    }}
+                  >
                     Select customer and SKU to load BOM information.
                   </p>
                 </div>
               </div>
 
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: "18px",
-                marginBottom: "24px",
-              }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  gap: "18px",
+                  marginBottom: "24px",
+                }}
+              >
                 <div>
                   <label style={labelStyle}>Customer</label>
                   <select
@@ -415,20 +561,22 @@ export default function Workability() {
                   />
 
                   {skuSearch && !selectedProduct && filteredProducts.length > 0 && (
-                    <div style={{
-                      position: "absolute",
-                      zIndex: 10,
-                      top: "72px",
-                      left: 0,
-                      right: 0,
-                      backgroundColor: "#fff",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "8px",
-                      boxShadow: "0 10px 20px rgba(15,23,42,0.12)",
-                      overflow: "hidden",
-                      maxHeight: "260px",
-                      overflowY: "auto",
-                    }}>
+                    <div
+                      style={{
+                        position: "absolute",
+                        zIndex: 10,
+                        top: "72px",
+                        left: 0,
+                        right: 0,
+                        backgroundColor: "#fff",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "8px",
+                        boxShadow: "0 10px 20px rgba(15,23,42,0.12)",
+                        overflow: "hidden",
+                        maxHeight: "260px",
+                        overflowY: "auto",
+                      }}
+                    >
                       {filteredProducts.map((item) => (
                         <button
                           key={item.id}
@@ -444,18 +592,22 @@ export default function Workability() {
                             borderBottom: "1px solid #e2e8f0",
                           }}
                         >
-                          <div style={{
-                            color: "#0f172a",
-                            fontWeight: "800",
-                            fontSize: "0.9rem",
-                          }}>
+                          <div
+                            style={{
+                              color: "#0f172a",
+                              fontWeight: "800",
+                              fontSize: "0.9rem",
+                            }}
+                          >
                             {item.sku}
                           </div>
-                          <div style={{
-                            color: "#64748b",
-                            fontSize: "0.8rem",
-                            marginTop: "2px",
-                          }}>
+                          <div
+                            style={{
+                              color: "#64748b",
+                              fontSize: "0.8rem",
+                              marginTop: "2px",
+                            }}
+                          >
                             {item.description}
                           </div>
                         </button>
@@ -465,38 +617,98 @@ export default function Workability() {
                 </div>
               </div>
 
-              <div style={{
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: "10px",
-                padding: "18px",
-                marginBottom: "22px",
-              }}>
+              <div
+                style={{
+                  backgroundColor: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "18px",
+                  marginBottom: "22px",
+                }}
+              >
                 <label style={labelStyle}>Product Description</label>
-                <div style={{
-                  color: selectedProduct ? "#0f172a" : "#94a3b8",
-                  fontWeight: "800",
-                  fontSize: "1rem",
-                  marginTop: "6px",
-                }}>
+                <div
+                  style={{
+                    color: selectedProduct ? "#0f172a" : "#94a3b8",
+                    fontWeight: "800",
+                    fontSize: "1rem",
+                    marginTop: "6px",
+                  }}
+                >
                   {selectedProduct?.description || "Select a SKU to load description."}
                 </div>
               </div>
 
+              {selectedProduct && components.length > 0 && !loadingInventory && (
+                <div
+                  style={{
+                    backgroundColor: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    borderRadius: "10px",
+                    padding: "16px",
+                    marginBottom: "18px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "16px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: "0.78rem", color: "#991b1b", fontWeight: "900" }}>
+                      WORKABILITY
+                    </div>
+                    <div style={{ fontSize: "1.3rem", color: "#7f1d1d", fontWeight: "900" }}>
+                      {summary.workability.toLocaleString("en-US")} Cases
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: "0.78rem", color: "#991b1b", fontWeight: "900" }}>
+                      LIMITING MATERIAL
+                    </div>
+                    <div style={{ fontSize: "1rem", color: "#7f1d1d", fontWeight: "900" }}>
+                      {summary.limitingMaterial}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadExcel}
+                    style={{
+                      backgroundColor: "#dc2626",
+                      color: "#fff",
+                      border: "none",
+                      padding: "10px 16px",
+                      borderRadius: "8px",
+                      fontWeight: "900",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <Download size={18} />
+                    Download Excel
+                  </button>
+                </div>
+              )}
+
               <div style={{ overflowX: "auto" }}>
-                <table style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontSize: "0.9rem",
-                  minWidth: "850px",
-                }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: "0.9rem",
+                    minWidth: "850px",
+                  }}
+                >
                   <thead>
                     <tr style={{ backgroundColor: "#f1f5f9" }}>
                       <th style={thStyle}>Component</th>
                       <th style={thStyle}>Type</th>
                       <th style={thStyle}>Qty / Case</th>
                       <th style={thStyle}>Reject Allowed</th>
-                      <th style={thStyle}>On Hand Mode</th>
+                      <th style={thStyle}>Exp. Date</th>
                       <th style={thStyle}>On Hand</th>
                       <th style={thStyle}>Cases Possible</th>
                     </tr>
@@ -526,28 +738,36 @@ export default function Workability() {
                         const inv = getInventoryForComponent(component);
                         const onHand = inv?.totalOnHand ?? 0;
                         const casesPossible = getCasesPossible(component);
+                        const type = String(component.type || "").toUpperCase();
+                        const isFeedstock = type === "FEEDSTOCK";
+                        const feedstockDates = getFeedstockDates(inv);
 
                         return (
                           <tr key={component.id}>
                             <td style={tdStyle}>
                               <strong>{component.component_sku}</strong>
-                              <div style={{
-                                color: "#64748b",
-                                fontSize: "0.78rem",
-                                marginTop: "4px",
-                              }}>
+                              <div
+                                style={{
+                                  color: "#64748b",
+                                  fontSize: "0.78rem",
+                                  marginTop: "4px",
+                                }}
+                              >
                                 {component.component_description || "-"}
                               </div>
-                              {inv?.searchedAs && inv.searchedAs !== component.component_sku && (
-                                <div style={{
-                                  color: "#2563eb",
-                                  fontSize: "0.72rem",
-                                  marginTop: "4px",
-                                  fontWeight: "800",
-                                }}>
-                                  Found as {inv.searchedAs}
-                                </div>
-                              )}
+                              {inv?.searchedAs &&
+                                inv.searchedAs !== component.component_sku && (
+                                  <div
+                                    style={{
+                                      color: "#2563eb",
+                                      fontSize: "0.72rem",
+                                      marginTop: "4px",
+                                      fontWeight: "800",
+                                    }}
+                                  >
+                                    Found as {inv.searchedAs}
+                                  </div>
+                                )}
                             </td>
 
                             <td style={tdStyle}>{component.type}</td>
@@ -555,10 +775,51 @@ export default function Workability() {
                             <td style={tdStyle}>{component.reject_percent || "-"}</td>
 
                             <td style={tdStyle}>
-                              <select style={smallSelectStyle} defaultValue="STOCK">
-                                <option value="STOCK">Stock</option>
-                                <option value="WIP">WIP</option>
-                              </select>
+                              {loadingInventory ? (
+                                "Loading..."
+                              ) : isFeedstock && feedstockDates.length > 0 ? (
+                                <details style={{ position: "relative" }}>
+                                  <summary
+                                    style={{
+                                      cursor: "pointer",
+                                      listStyle: "none",
+                                      color: "#0f172a",
+                                      fontWeight: "900",
+                                    }}
+                                  >
+                                    {formatDate(inv?.earliestExpiration)} ▼
+                                  </summary>
+
+                                  <div
+                                    style={{
+                                      marginTop: "8px",
+                                      backgroundColor: "#fff",
+                                      border: "1px solid #cbd5e1",
+                                      borderRadius: "8px",
+                                      padding: "8px",
+                                      boxShadow: "0 8px 18px rgba(15,23,42,0.12)",
+                                      minWidth: "120px",
+                                    }}
+                                  >
+                                    {feedstockDates.map((date) => (
+                                      <div
+                                        key={date}
+                                        style={{
+                                          padding: "5px 8px",
+                                          borderBottom: "1px solid #e2e8f0",
+                                          fontSize: "0.8rem",
+                                          color: "#334155",
+                                          fontWeight: "800",
+                                        }}
+                                      >
+                                        {date}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
+                              ) : (
+                                "-"
+                              )}
                             </td>
 
                             <td style={tdStyle}>
@@ -575,22 +836,6 @@ export default function Workability() {
                   </tbody>
                 </table>
               </div>
-
-              <button
-                type="button"
-                style={{
-                  marginTop: "22px",
-                  backgroundColor: "#dc2626",
-                  color: "#fff",
-                  border: "none",
-                  padding: "12px 18px",
-                  borderRadius: "8px",
-                  fontWeight: "900",
-                  cursor: "pointer",
-                }}
-              >
-                Calculate Workability
-              </button>
             </div>
           )}
         </div>
@@ -633,13 +878,4 @@ const tdStyle = {
   color: "#334155",
   textAlign: "center",
   fontWeight: "700",
-};
-
-const smallSelectStyle = {
-  border: "1px solid #cbd5e1",
-  borderRadius: "7px",
-  padding: "7px",
-  fontWeight: "800",
-  color: "#0f172a",
-  backgroundColor: "#fff",
 };
