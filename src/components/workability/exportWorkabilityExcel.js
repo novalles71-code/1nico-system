@@ -1,8 +1,10 @@
 import * as XLSX from "xlsx-js-style";
 import {
   formatDate,
+  getComponentOptionRows,
   getDaysRemaining,
   getShelfLifeColor,
+  normalizeKey,
 } from "./workabilityHelpers";
 
 const getRowTypeFill = (value) => {
@@ -54,15 +56,54 @@ export const exportWorkabilitySummaryExcel = ({
   customer,
   selectedProduct,
   components,
+  qtyNeeded,
   getSelectedSkuForComponent,
   getQtyPerCaseForComponent,
   getOnHand,
   getCasesPossible,
+  getNeedQty,
 }) => {
   if (!selectedProduct || !components.length) {
     alert("Select a SKU before downloading.");
     return;
   }
+
+  const hasQtyNeeded = Number(qtyNeeded || 0) > 0;
+
+  const itemRows = components.flatMap((component) => {
+    const optionRows = getComponentOptionRows(component);
+    const rowsToShow = optionRows.length > 0
+      ? optionRows
+      : [
+          {
+            sku: normalizeKey(component.component_sku),
+            qtyPerCase: component.qty_per_case,
+          },
+        ];
+
+    return rowsToShow.map((option) => {
+      const itemSku = option.sku;
+      const qtyPerCase = getQtyPerCaseForComponent
+        ? getQtyPerCaseForComponent(component, itemSku)
+        : option.qtyPerCase;
+      const needQty = getNeedQty
+        ? getNeedQty(component, itemSku)
+        : Number(qtyNeeded || 0) * Number(qtyPerCase || 0);
+      const onHand = getOnHand(component, itemSku);
+      const casesPossible = getCasesPossible(component, null, itemSku);
+      const shortQty = Math.max(Number(needQty || 0) - Number(onHand || 0), 0);
+      const status = !hasQtyNeeded ? "-" : shortQty > 0 ? "SHORT" : "OK";
+
+      return {
+        itemSku,
+        qtyPerCase,
+        needQty,
+        onHand,
+        casesPossible,
+        status,
+      };
+    });
+  });
 
   const rows = [
     ["WORKABILITY CALCULATOR"],
@@ -70,28 +111,31 @@ export const exportWorkabilitySummaryExcel = ({
     ["Customer", customer],
     ["SKU", selectedProduct.sku],
     ["Description", selectedProduct.description],
+    ["Qty Needed", hasQtyNeeded ? `${Number(qtyNeeded).toLocaleString("en-US")} CS` : ""],
     [],
-    ["Items #", "Qty / CS", "On Hand", "Cases Possible"],
-    ...components.map((component) => {
-      const itemSku = getSelectedSkuForComponent(component);
-      const qtyPerCase = getQtyPerCaseForComponent
-        ? getQtyPerCaseForComponent(component, itemSku)
-        : component.qty_per_case;
-
-      return [
-        itemSku,
-        qtyPerCase,
-        getOnHand(component, itemSku),
-        getCasesPossible(component, null, itemSku),
-      ];
-    }),
+    ["Items #", "Qty / CS", "Need", "On Hand", "Cases Possible", "Status"],
+    ...itemRows.map((row) => [
+      row.itemSku,
+      row.qtyPerCase,
+      hasQtyNeeded ? row.needQty : "",
+      row.onHand,
+      row.casesPossible,
+      row.status,
+    ]),
   ];
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
 
-  worksheet["!cols"] = [{ wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 18 }];
-  worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
+  worksheet["!cols"] = [
+    { wch: 22 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 12 },
+  ];
+  worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
 
   styleSheet(worksheet);
 

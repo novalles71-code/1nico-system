@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, PackageSearch, RotateCcw, AlertCircle } from "lucide-react";
+import { Download, PackageSearch, RotateCcw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { fetchInventoryBatchMap } from "./inventoryApi";
 import {
@@ -28,6 +28,7 @@ export default function WorkabilityCalculator() {
 
   const [clients, setClients] = useState([]);
   const [customer, setCustomer] = useState("");
+  const [qtyNeeded, setQtyNeeded] = useState("");
   const [selectedSites, setSelectedSites] = useState([]);
   const [draftSelectedSites, setDraftSelectedSites] = useState([]);
   const [siteDropdownOpen, setSiteDropdownOpen] = useState(false);
@@ -379,51 +380,70 @@ export default function WorkabilityCalculator() {
     return calculateCasesPossible(onHand, qtyPerCase);
   };
 
-  const summaryRows = useMemo(() => {
-    return components.map((component) => {
-      const optionRows = getComponentOptionRows(component);
-      const primary = optionRows[0] || {
-        sku: normalizeKey(component.component_sku),
-        qtyPerCase: component.qty_per_case,
-      };
+  const getNeedQty = (component, itemSku = null) => {
+    const casesNeeded = Number(qtyNeeded || 0);
+    const qtyPerCase = Number(getQtyPerCaseForComponent(component, itemSku) || 0);
 
-      const hasOptions = optionRows.length > 1;
-      const selectedSku = selectedOptions[component.id] || primary.sku;
-      const selectedOption =
-        optionRows.find((option) => option.sku === selectedSku) || primary;
+    if (!casesNeeded || !qtyPerCase) return 0;
 
-      const onHand = getOnHand(component, selectedOption.sku);
-      const casesPossible = getCasesPossible(component, null, selectedOption.sku);
-      const inventoryMissing =
-        loadingInventory && !getInventoryForComponent(component, selectedOption.sku);
+    return casesNeeded * qtyPerCase;
+  };
 
-      return {
-        component,
-        optionRows,
-        hasOptions,
-        selectedOption,
-        onHand,
-        casesPossible,
-        inventoryMissing,
-      };
+  const getShortQty = (needQty, onHand) => {
+    return Math.max(Number(needQty || 0) - Number(onHand || 0), 0);
+  };
+
+  const getShortCases = (casesPossible) => {
+    const casesNeeded = Number(qtyNeeded || 0);
+    if (!casesNeeded) return 0;
+
+    return Math.max(casesNeeded - Number(casesPossible || 0), 0);
+  };
+
+  const formatWorkabilityNumber = (value, maximumFractionDigits = 4) => {
+    return Number(value || 0).toLocaleString("en-US", {
+      maximumFractionDigits,
     });
-  }, [components, selectedOptions, inventory, loadingInventory, selectedSites, customer]);
+  };
 
-  const limitingMaterial = useMemo(() => {
-    if (!summaryRows.length) return null;
+  const summaryRows = useMemo(() => {
+    return components.flatMap((component) => {
+      const optionRows = getComponentOptionRows(component);
+      const rowsToShow = optionRows.length > 0
+        ? optionRows
+        : [
+            {
+              sku: normalizeKey(component.component_sku),
+              qtyPerCase: component.qty_per_case,
+            },
+          ];
 
-    const validRows = summaryRows
-      .filter((row) => row.selectedOption?.sku)
-      .map((row) => ({
-        item: row.selectedOption.sku,
-        qtyPerCase: row.selectedOption.qtyPerCase,
-        onHand: row.onHand,
-        casesPossible: row.casesPossible,
-      }))
-      .sort((a, b) => a.casesPossible - b.casesPossible);
+      return rowsToShow.map((selectedOption) => {
+        const onHand = getOnHand(component, selectedOption.sku);
+        const casesPossible = getCasesPossible(component, null, selectedOption.sku);
+        const needQty = getNeedQty(component, selectedOption.sku);
+        const shortQty = getShortQty(needQty, onHand);
+        const shortCases = getShortCases(casesPossible);
+        const hasQtyNeeded = Number(qtyNeeded || 0) > 0;
+        const workable = hasQtyNeeded ? shortQty <= 0 : null;
+        const inventoryMissing =
+          loadingInventory && !getInventoryForComponent(component, selectedOption.sku);
 
-    return validRows[0] || null;
-  }, [summaryRows]);
+        return {
+          component,
+          selectedOption,
+          onHand,
+          casesPossible,
+          needQty,
+          shortQty,
+          shortCases,
+          workable,
+          inventoryMissing,
+        };
+      });
+    });
+  }, [components, selectedOptions, inventory, loadingInventory, selectedSites, customer, qtyNeeded]);
+
 
   const selectedDetailComponent = components.find(
     (component) => component.id === selectedDetailId
@@ -530,10 +550,12 @@ export default function WorkabilityCalculator() {
       customer,
       selectedProduct,
       components,
+      qtyNeeded,
       getSelectedSkuForComponent,
       getQtyPerCaseForComponent,
       getOnHand,
       getCasesPossible,
+      getNeedQty,
     });
   };
 
@@ -856,34 +878,32 @@ export default function WorkabilityCalculator() {
             </div>
           ) : (
             <div>
-              <div style={productTitleStyle}>{selectedProduct.description}</div>
-
-              {loadingInventory && (
-                <div style={inventoryStatusStyle}>
-                  Loading inventory in the background...
+              <div style={productInfoBarStyle}>
+                <div>
+                  <div style={productInfoLabelStyle}>DESCRIPTION</div>
+                  <div style={productTitleStyle}>{selectedProduct.description}</div>
                 </div>
-              )}
 
-              {!loadingInventory && inventoryLoadError && (
-                <div style={inventoryErrorStyle}>
-                  <AlertCircle size={20} />
-                  <div>
-                    <strong>{inventoryLoadError}</strong>
-                    <span>
-                      BOM components are loaded. Start or check the Inventory Server, then
-                      change Site or reselect SKU.
-                    </span>
-                  </div>
+                <div style={qtyNeededBoxStyle}>
+                  <label style={labelStyle}>QTY NEEDED</label>
+                  <input
+                    value={qtyNeeded}
+                    onChange={(e) => setQtyNeeded(e.target.value.replace(/[^\d.]/g, ""))}
+                    placeholder="Cases needed..."
+                    style={inputStyle}
+                  />
                 </div>
-              )}
+              </div>
 
               <table style={summaryTableStyle}>
                 <thead>
                   <tr>
                     <th style={thStyle}>ITEMS #</th>
                     <th style={thStyle}>QTY/CS</th>
+                    <th style={thStyle}>NEED</th>
                     <th style={thStyle}>ON HAND</th>
                     <th style={thStyle}>CASES POSSIBLE</th>
+                    <th style={thStyle}>STATUS</th>
                   </tr>
                 </thead>
 
@@ -891,88 +911,35 @@ export default function WorkabilityCalculator() {
                   {summaryRows.map((row) => {
                     const {
                       component,
-                      optionRows,
-                      hasOptions,
                       selectedOption,
                       onHand,
                       casesPossible,
+                      needQty,
+                      workable,
                       inventoryMissing,
                     } = row;
 
                     return (
-                      <tr key={component.id}>
+                      <tr key={`${component.id}-${selectedOption.sku}`}>
                         <td style={{ ...tdStyle, textAlign: "left" }}>
-                          {hasOptions ? (
-                            <div style={itemDropdownShellStyle}>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenDetail(component, selectedOption.sku);
-                                }}
-                                style={itemDropdownTextStyle}
-                              >
-                                {selectedOption.sku}
-                              </button>
-
-                              <div style={{ position: "relative" }}>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenComponentOptionId((prev) =>
-                                      prev === component.id ? null : component.id
-                                    );
-                                  }}
-                                  style={itemDropdownArrowButtonStyle}
-                                  title="Select component option"
-                                >
-                                  ▼
-                                </button>
-
-                                {openComponentOptionId === component.id && (
-                                  <div style={itemOptionMenuStyle}>
-                                    {optionRows.map((option) => (
-                                      <button
-                                        key={option.sku}
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedOptions((prev) => ({
-                                            ...prev,
-                                            [component.id]: option.sku,
-                                          }));
-                                          setOpenComponentOptionId(null);
-                                        }}
-                                        style={{
-                                          ...itemOptionButtonStyle,
-                                          backgroundColor:
-                                            option.sku === selectedOption.sku ? "#eff6ff" : "#fff",
-                                          color:
-                                            option.sku === selectedOption.sku ? "#1d5ee8" : "#0f172a",
-                                        }}
-                                      >
-                                        {option.sku}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleOpenDetail(component, selectedOption.sku)
-                              }
-                              style={itemLinkStyle}
-                            >
-                              {selectedOption.sku}
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenDetail(component, selectedOption.sku)
+                            }
+                            style={itemLinkStyle}
+                          >
+                            {selectedOption.sku}
+                          </button>
                         </td>
 
                         <td style={tdStyle}>{selectedOption.qtyPerCase}</td>
+
+                        <td style={tdStyle}>
+                          {Number(qtyNeeded || 0) > 0
+                            ? formatWorkabilityNumber(needQty)
+                            : "-"}
+                        </td>
 
                         <td style={tdStyle}>
                           {inventoryMissing ? "Loading..." : onHand.toLocaleString("en-US")}
@@ -983,33 +950,33 @@ export default function WorkabilityCalculator() {
                             ? "Loading..."
                             : `${casesPossible.toLocaleString("en-US")} CS`}
                         </td>
+
+                        <td
+                          style={{
+                            ...tdStyle,
+                            color:
+                              workable === null
+                                ? "#64748b"
+                                : workable
+                                  ? "#11843b"
+                                  : "#dc2626",
+                            fontWeight: "950",
+                          }}
+                        >
+                          {Number(qtyNeeded || 0) > 0
+                            ? workable
+                              ? "OK"
+                              : "SHORT"
+                            : "-"}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
 
-              {limitingMaterial && (
-                <div style={limitingCardStyle}>
-                  <div>
-                    <div style={limitingLabelStyle}>LIMITING MATERIAL</div>
-                    <div style={limitingItemStyle}>{limitingMaterial.item}</div>
-                  </div>
-
-                  <div style={limitingRightStyle}>
-                    <div style={limitingCasesStyle}>
-                      {limitingMaterial.casesPossible.toLocaleString("en-US")} CS
-                    </div>
-                    <div style={limitingSubStyle}>
-                      On Hand: {limitingMaterial.onHand.toLocaleString("en-US")} · Qty/CS:{" "}
-                      {limitingMaterial.qtyPerCase}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <div style={hintBoxStyle}>
-                Click item number to view inventory details. Use ▼ only to change item option.
+                Click item number to view inventory details. Component options are shown as independent items.
               </div>
             </div>
           )}
@@ -1926,6 +1893,91 @@ const itemOptionButtonStyle = {
 
 const siteGroupRowStyle = {
   backgroundColor: "#eef6ff",
+};
+
+const productInfoBarStyle = {
+  marginBottom: "14px",
+  display: "grid",
+  gridTemplateColumns: "1fr 230px",
+  gap: "18px",
+  alignItems: "end",
+};
+
+const productInfoLabelStyle = {
+  color: "#64748b",
+  fontWeight: "950",
+  fontSize: "0.72rem",
+  letterSpacing: "0.06em",
+  marginBottom: "4px",
+};
+
+const qtyNeededBoxStyle = {
+  maxWidth: "230px",
+};
+
+const statusCardStyle = {
+  marginTop: "18px",
+  border: "1px solid #dbe3ea",
+  backgroundColor: "#f8fafc",
+  borderRadius: "8px",
+  padding: "14px 16px",
+};
+
+const statusHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "14px",
+  marginBottom: "10px",
+};
+
+const statusLabelStyle = {
+  color: "#64748b",
+  fontWeight: "950",
+  fontSize: "0.72rem",
+  letterSpacing: "0.06em",
+};
+
+const statusSubtitleStyle = {
+  color: "#172033",
+  fontWeight: "950",
+  fontSize: "0.95rem",
+  marginTop: "3px",
+};
+
+const statusQtyStyle = {
+  color: "#334155",
+  fontWeight: "900",
+  fontSize: "0.82rem",
+};
+
+const statusTableStyle = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  fontSize: "0.84rem",
+  border: "1px solid #dbe3ea",
+  borderRadius: "6px",
+  overflow: "hidden",
+};
+
+const statusThStyle = {
+  borderRight: "1px solid #dbe3ea",
+  borderBottom: "1px solid #dbe3ea",
+  padding: "8px",
+  color: "#172033",
+  textAlign: "center",
+  fontWeight: "950",
+  backgroundColor: "#fff",
+};
+
+const statusTdStyle = {
+  borderRight: "1px solid #dbe3ea",
+  borderBottom: "1px solid #dbe3ea",
+  padding: "7px 10px",
+  color: "#172033",
+  textAlign: "center",
+  fontWeight: "850",
 };
 
 const limitingCardStyle = {
