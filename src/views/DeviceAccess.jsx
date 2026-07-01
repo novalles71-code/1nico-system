@@ -113,9 +113,6 @@ export default function DeviceAccess() {
               <option value="system2">System 2</option>
               <option value="system3">System 3</option>
               <option value="system4">System 4</option>
-              <option value="B6">B6 Supplies</option>
-              <option value="B8">B8 Supplies</option>
-              <option value="B9">B9 Supplies</option>
             </select>
 
             <input

@@ -76,14 +76,6 @@ export default function Home() {
     },
 
     {
-      id: "supplies",
-      title: "SUPPLIES",
-      desc: "Manage weekly supplies orders.",
-      icon: <Boxes size={40} />,
-      path: "/supplies",
-    },
-
-    {
       id: "workability",
       title: "WORKABILITY",
       desc: "BOM, inventory and cases possible.",
