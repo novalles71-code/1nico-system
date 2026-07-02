@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, PackageSearch, RotateCcw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { fetchInventoryBatchMap } from "./inventoryApi";
@@ -23,11 +23,62 @@ import {
 } from "./exportWorkabilityExcel";
 import { getMdlzSearchCandidatesForComponent } from "../mdlz/searchRules";
 
+const parseInventoryDateLocal = (value) => {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const text = String(value).trim();
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return new Date(
+      Number(isoMatch[1]),
+      Number(isoMatch[2]) - 1,
+      Number(isoMatch[3])
+    );
+  }
+
+  const usMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (usMatch) {
+    return new Date(
+      Number(usMatch[3]),
+      Number(usMatch[1]) - 1,
+      Number(usMatch[2])
+    );
+  }
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+};
+
+const formatInventoryDate = (value) => {
+  const date = parseInventoryDateLocal(value);
+  if (!date) return "-";
+
+  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+};
+
+const getInventoryDaysRemaining = (value) => {
+  const date = parseInventoryDateLocal(value);
+  if (!date) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Math.ceil((date.getTime() - today.getTime()) / 86400000);
+};
+
 export default function WorkabilityCalculator() {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
   const [clients, setClients] = useState([]);
   const [customer, setCustomer] = useState("");
+  const [activeModule, setActiveModule] = useState("bom");
   const [qtyNeeded, setQtyNeeded] = useState("");
   const [selectedSites, setSelectedSites] = useState([]);
   const [draftSelectedSites, setDraftSelectedSites] = useState([]);
@@ -42,11 +93,23 @@ export default function WorkabilityCalculator() {
 
   const [skuSearch, setSkuSearch] = useState("");
   const [skuHighlightIndex, setSkuHighlightIndex] = useState(0);
+  const skuOptionRefs = useRef([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
   const [selectedDetailId, setSelectedDetailId] = useState(null);
   const [detailShelfLifeDays, setDetailShelfLifeDays] = useState("");
   const [shelfLifeApplied, setShelfLifeApplied] = useState(false);
+  const [candyShelfLifeDays, setCandyShelfLifeDays] = useState("");
+
+  const [itemCatalog, setItemCatalog] = useState([]);
+  const [itemSearch, setItemSearch] = useState("");
+  const [itemHighlightIndex, setItemHighlightIndex] = useState(0);
+  const itemOptionRefs = useRef([]);
+  const [selectedItemSku, setSelectedItemSku] = useState("");
+  const [itemInventory, setItemInventory] = useState({});
+  const [itemShelfLifeDays, setItemShelfLifeDays] = useState("");
+  const [loadingItemInventory, setLoadingItemInventory] = useState(false);
+  const [itemExpandedDates, setItemExpandedDates] = useState({});
 
   const [openFilter, setOpenFilter] = useState(null);
   const [sortConfig, setSortConfig] = useState({
@@ -106,6 +169,36 @@ export default function WorkabilityCalculator() {
     return [normalizeKey(skuToUse)].filter(Boolean);
   };
 
+  const isCandyComponent = (component) => {
+    const text = [
+      component?.component_description,
+      component?.description,
+      component?.type,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return text.includes("candy");
+  };
+
+  const isShelfLifeUsable = (expDate, daysRequired) => {
+    const days = Number(daysRequired || 0);
+    if (!days) return true;
+
+    const exp = parseInventoryDateLocal(expDate);
+    if (!exp) return true;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const minimumDate = new Date(today);
+    minimumDate.setDate(minimumDate.getDate() + days);
+
+    return exp >= minimumDate;
+  };
+
+
   const loadClients = async () => {
     setLoadingClients(true);
 
@@ -158,6 +251,65 @@ export default function WorkabilityCalculator() {
     setProducts(data || []);
     setLoadingProducts(false);
   };
+
+  const loadItemCatalog = async (clientCode) => {
+    if (!clientCode) {
+      setItemCatalog([]);
+      return;
+    }
+
+    const { data: productRows, error: productError } = await supabase
+      .from("workability_products")
+      .select("id")
+      .eq("customer", clientCode);
+
+    if (productError) {
+      console.warn("Load item catalog products error:", productError);
+      setItemCatalog([]);
+      return;
+    }
+
+    const productIds = (productRows || []).map((product) => product.id);
+    if (!productIds.length) {
+      setItemCatalog([]);
+      return;
+    }
+
+    const { data: componentRows, error: componentError } = await supabase
+      .from("workability_components")
+      .select("component_sku, component_description, component_options")
+      .in("product_id", productIds);
+
+    if (componentError) {
+      console.warn("Load item catalog components error:", componentError);
+      setItemCatalog([]);
+      return;
+    }
+
+    const itemMap = new Map();
+
+    (componentRows || []).forEach((component) => {
+      const optionRows = getComponentOptionRows(component);
+      const rowsToUse = optionRows.length
+        ? optionRows
+        : [{ sku: normalizeKey(component.component_sku) }];
+
+      rowsToUse.forEach((row) => {
+        const sku = normalizeKey(row.sku);
+        if (!sku) return;
+
+        if (!itemMap.has(sku)) {
+          itemMap.set(sku, {
+            sku,
+            description: component.component_description || "",
+          });
+        }
+      });
+    });
+
+    setItemCatalog(Array.from(itemMap.values()).sort((a, b) => a.sku.localeCompare(b.sku)));
+  };
+
 
   const loadInventory = async (bomComponents, sitesToUse = selectedSites) => {
     if (!bomComponents || bomComponents.length === 0) {
@@ -267,7 +419,13 @@ export default function WorkabilityCalculator() {
     setInventory({});
     setSelectedOptions({});
     setSelectedDetailId(null);
+    setItemSearch("");
+    setSelectedItemSku("");
+    setItemInventory({});
+    setItemShelfLifeDays("");
+    setItemExpandedDates({});
     loadProducts(customer);
+    loadItemCatalog(customer);
   }, [customer]);
 
   useEffect(() => {
@@ -300,6 +458,12 @@ export default function WorkabilityCalculator() {
   useEffect(() => {
     setSkuHighlightIndex(0);
   }, [skuSearch, filteredProducts.length]);
+
+  useEffect(() => {
+    skuOptionRefs.current[skuHighlightIndex]?.scrollIntoView({
+      block: "nearest",
+    });
+  }, [skuHighlightIndex]);
 
   const handleSkuKeyDown = async (event) => {
     if (!skuSearch || selectedProduct || filteredProducts.length === 0) return;
@@ -362,11 +526,22 @@ export default function WorkabilityCalculator() {
     const skuToUse = itemSku || getSelectedSkuForComponent(component);
     const inv = getInventoryForComponent(component, skuToUse);
     const rows = getInventoryRowsForComponent(component, skuToUse);
-    const rowsOnHand = rows.reduce((sum, row) => sum + Number(row.onHand || 0), 0);
+    const usableRows =
+      isCandyComponent(component) && Number(candyShelfLifeDays || 0) > 0
+        ? rows.filter((row) => isShelfLifeUsable(row.expDate, candyShelfLifeDays))
+        : rows;
+
+    const rowsOnHand = usableRows.reduce(
+      (sum, row) => sum + Number(row.onHand || 0),
+      0
+    );
 
     if (rowsOnHand > 0) return rowsOnHand;
 
-    if (inv?.totalOnHand !== undefined) {
+    if (
+      rows.length === usableRows.length &&
+      inv?.totalOnHand !== undefined
+    ) {
       return Number(inv.totalOnHand || 0);
     }
 
@@ -442,8 +617,186 @@ export default function WorkabilityCalculator() {
         };
       });
     });
-  }, [components, selectedOptions, inventory, loadingInventory, selectedSites, customer, qtyNeeded]);
+  }, [components, selectedOptions, inventory, loadingInventory, selectedSites, customer, qtyNeeded, candyShelfLifeDays]);
 
+
+  const filteredItemCatalog = itemCatalog.filter((item) => {
+    const search = itemSearch.toLowerCase().trim();
+
+    return (
+      search &&
+      (String(item.sku || "").toLowerCase().includes(search) ||
+        String(item.description || "").toLowerCase().includes(search))
+    );
+  });
+
+  useEffect(() => {
+    setItemHighlightIndex(0);
+  }, [itemSearch, filteredItemCatalog.length]);
+
+  useEffect(() => {
+    itemOptionRefs.current[itemHighlightIndex]?.scrollIntoView({
+      block: "nearest",
+    });
+  }, [itemHighlightIndex]);
+
+  const loadItemInventory = async (itemSku) => {
+    const cleanSku = normalizeKey(itemSku);
+    if (!cleanSku) return;
+
+    setLoadingItemInventory(true);
+    setItemExpandedDates({});
+    setSelectedItemSku(cleanSku);
+    setItemSearch(cleanSku);
+
+    try {
+      const map = await fetchInventoryBatchMap({
+        bomComponents: [
+          {
+            id: `item-${cleanSku}`,
+            component_sku: cleanSku,
+            component_options: null,
+          },
+        ],
+        siteToUse: selectedSites[0] || SITE_ALL,
+        selectedSites,
+        customer,
+      });
+
+      setItemInventory(map || {});
+    } catch (err) {
+      console.error("Item inventory server error:", err);
+      setItemInventory({});
+    } finally {
+      setLoadingItemInventory(false);
+    }
+  };
+
+  const handleItemKeyDown = async (event) => {
+    if (!itemSearch || filteredItemCatalog.length === 0) {
+      if (event.key === "Enter" && itemSearch) {
+        event.preventDefault();
+        await loadItemInventory(itemSearch);
+      }
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setItemHighlightIndex((prev) =>
+        prev >= filteredItemCatalog.length - 1 ? 0 : prev + 1
+      );
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setItemHighlightIndex((prev) =>
+        prev <= 0 ? filteredItemCatalog.length - 1 : prev - 1
+      );
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const selected = filteredItemCatalog[itemHighlightIndex] || filteredItemCatalog[0];
+      if (selected) await loadItemInventory(selected.sku);
+    }
+  };
+
+  const itemInventoryRows = useMemo(() => {
+    if (!selectedItemSku) return [];
+
+    const inventoryData = itemInventory[normalizeKey(selectedItemSku)];
+    const rows = getInventoryRows(inventoryData, SITE_ALL, customer);
+    const allowedSites = selectedSites.map(normalizeKey).filter(Boolean);
+    const siteRows = allowedSites.length
+      ? rows.filter((row) => allowedSites.includes(normalizeKey(row.site)))
+      : rows;
+
+    return siteRows.filter((row) =>
+      isShelfLifeUsable(row.expDate, itemShelfLifeDays)
+    );
+  }, [selectedItemSku, itemInventory, selectedSites, customer, itemShelfLifeDays]);
+
+  const itemTotalOnHand = itemInventoryRows.reduce(
+    (sum, row) => sum + Number(row.onHand || 0),
+    0
+  );
+
+  const itemGroupedBySite = itemInventoryRows.reduce((groups, row) => {
+    const siteKey = row.site || "NO SITE";
+    const dateKey = formatInventoryDate(row.expDate);
+
+    if (!groups[siteKey]) {
+      groups[siteKey] = {
+        id: `item-site-${siteKey}`,
+        siteKey,
+        rows: [],
+        onHand: 0,
+        dates: {},
+      };
+    }
+
+    groups[siteKey].rows.push(row);
+    groups[siteKey].onHand += Number(row.onHand || 0);
+
+    if (!groups[siteKey].dates[dateKey]) {
+      groups[siteKey].dates[dateKey] = {
+        id: `item-date-${siteKey}-${dateKey}`,
+        siteKey,
+        dateKey,
+        expDate: row.expDate,
+        uom: row.uom,
+        rows: [],
+        onHand: 0,
+      };
+    }
+
+    groups[siteKey].dates[dateKey].rows.push(row);
+    groups[siteKey].dates[dateKey].onHand += Number(row.onHand || 0);
+    return groups;
+  }, {});
+
+  const itemDisplayRows = [];
+
+  Object.values(itemGroupedBySite).forEach((siteGroup) => {
+    itemDisplayRows.push({
+      ...siteGroup,
+      group: true,
+      groupType: "site",
+    });
+
+    if (itemExpandedDates[siteGroup.siteKey]) {
+      Object.values(siteGroup.dates).forEach((dateGroup) => {
+        itemDisplayRows.push({
+          ...dateGroup,
+          group: true,
+          groupType: "date",
+          location: `${dateGroup.rows.length} location${dateGroup.rows.length === 1 ? "" : "s"}`,
+          pallet: `${dateGroup.rows.length} pallet${dateGroup.rows.length === 1 ? "" : "s"}`,
+          lot: `${dateGroup.rows.length} lot${dateGroup.rows.length === 1 ? "" : "s"}`,
+        });
+
+        const dateExpandKey = `${dateGroup.siteKey}-${dateGroup.dateKey}`;
+
+        if (itemExpandedDates[dateExpandKey]) {
+          dateGroup.rows.forEach((row) => {
+            itemDisplayRows.push({
+              ...row,
+              child: true,
+              id: `${dateExpandKey}-${row.id}`,
+            });
+          });
+        }
+      });
+    }
+  });
+
+  while (itemDisplayRows.length < 8) {
+    itemDisplayRows.push({
+      empty: true,
+      id: `item-empty-${itemDisplayRows.length}`,
+    });
+  }
 
   const selectedDetailComponent = components.find(
     (component) => component.id === selectedDetailId
@@ -455,7 +808,7 @@ export default function WorkabilityCalculator() {
 
   const uniqueValues = (field) => {
     const values = detailRows
-      .map((row) => (field === "expDate" ? formatDate(row.expDate) : row[field]))
+      .map((row) => (field === "expDate" ? formatInventoryDate(row.expDate) : row[field]))
       .filter(Boolean);
 
     return Array.from(new Set(values)).sort();
@@ -465,7 +818,7 @@ export default function WorkabilityCalculator() {
     if (!value || value.length === 0) return true;
     if (value.includes(FILTER_NONE)) return false;
 
-    const rowValue = field === "expDate" ? formatDate(row.expDate) : row[field];
+    const rowValue = field === "expDate" ? formatInventoryDate(row.expDate) : row[field];
     return value.includes(rowValue);
   };
 
@@ -483,7 +836,7 @@ export default function WorkabilityCalculator() {
     if (!sortConfig.field || !sortConfig.direction) return 0;
 
     const getValue = (row) => {
-      if (sortConfig.field === "expDate") return new Date(row.expDate).getTime() || 0;
+      if (sortConfig.field === "expDate") return parseInventoryDateLocal(row.expDate)?.getTime() || 0;
       return String(row[sortConfig.field] || "").toLowerCase();
     };
 
@@ -528,6 +881,10 @@ export default function WorkabilityCalculator() {
     }
 
     setShelfLifeApplied(true);
+
+    if (selectedDetailComponent && isCandyComponent(selectedDetailComponent)) {
+      setCandyShelfLifeDays(detailShelfLifeDays);
+    }
   };
 
   const clearFilters = () => {
@@ -634,7 +991,7 @@ export default function WorkabilityCalculator() {
 
   const groupedDetailRows = sortedDetailRows.reduce((groups, row) => {
     const siteKey = row.site || "NO SITE";
-    const dateKey = formatDate(row.expDate);
+    const dateKey = formatInventoryDate(row.expDate);
 
     if (!groups[siteKey]) {
       groups[siteKey] = {
@@ -741,7 +1098,7 @@ export default function WorkabilityCalculator() {
           <span style={workstationStyle}>Workstation</span>
         </div>
 
-        <div style={headerTitleStyle}>WORKABILITY CALCULATOR</div>
+        <div style={headerTitleStyle}>WORKABILITY</div>
 
         <div style={dateBoxStyle}>
           <div style={dateTextStyle}>{formattedDate}</div>
@@ -751,6 +1108,35 @@ export default function WorkabilityCalculator() {
 
       <div style={contentWrapStyle}>
         <div style={mainCardStyle}>
+
+          <div style={moduleTabsStyle}>
+            <button
+              type="button"
+              onClick={() => setActiveModule("bom")}
+              style={{
+                ...moduleTabStyle,
+                ...(activeModule === "bom" ? moduleTabActiveStyle : {}),
+              }}
+            >
+              BOM
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveModule("item");
+                setSelectedDetailId(null);
+              }}
+              style={{
+                ...moduleTabStyle,
+                ...(activeModule === "item" ? moduleTabActiveStyle : {}),
+              }}
+            >
+              ITEM #
+            </button>
+          </div>
+
+          {activeModule === "bom" ? (
+            <>
           <div style={topControlsStyle}>
             <div>
               <label style={labelStyle}>CUSTOMER</label>
@@ -836,6 +1222,9 @@ export default function WorkabilityCalculator() {
                   {filteredProducts.map((item, index) => (
                     <button
                       key={item.id}
+                      ref={(element) => {
+                        skuOptionRefs.current[index] = element;
+                      }}
                       type="button"
                       onClick={() => handleSelectSku(item)}
                       style={{
@@ -980,9 +1369,329 @@ export default function WorkabilityCalculator() {
               </div>
             </div>
           )}
+            </>
+          ) : (
+            <>
+              <div style={itemControlsStyle}>
+                <div>
+                  <label style={labelStyle}>CUSTOMER</label>
+                  <select
+                    value={customer}
+                    disabled={loadingClients}
+                    onChange={(e) => setCustomer(e.target.value)}
+                    style={inputStyle}
+                  >
+                    {clients.length === 0 && (
+                      <option value="">
+                        {loadingClients ? "Loading..." : "No clients found"}
+                      </option>
+                    )}
+
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.code}>
+                        {client.code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ position: "relative" }}>
+                  <label style={labelStyle}>SITE</label>
+                  <button type="button" onClick={openSiteDropdown} style={siteDropdownButtonStyle}>
+                    <span>{selectedSiteLabel}</span>
+                    <span>▼</span>
+                  </button>
+
+                  {siteDropdownOpen && (
+                    <div style={siteMenuStyle}>
+                      <div style={siteMenuActionsStyle}>
+                        <button type="button" onClick={clearSiteFilter} style={siteMiniButtonStyle}>
+                          Clear Filter
+                        </button>
+                        <button type="button" onClick={toggleDraftAllSites} style={siteMiniButtonStyle}>
+                          {draftSelectedSites.length === availableSites.length ? "Deselect All" : "Select All"}
+                        </button>
+                      </div>
+
+                      <div style={siteOptionsScrollStyle}>
+                        {availableSites.map((site) => (
+                          <label key={site} style={siteCheckLabelStyle}>
+                            <input
+                              type="checkbox"
+                              checked={draftSelectedSites.includes(site)}
+                              onChange={() => toggleDraftSite(site)}
+                            />
+                            <span>{site}</span>
+                          </label>
+                        ))}
+                      </div>
+
+                      <div style={siteMenuFooterStyle}>
+                        <button type="button" onClick={applySiteSelection} style={siteOkButtonStyle}>
+                          OK
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ position: "relative" }}>
+                  <label style={labelStyle}>ITEM #</label>
+                  <input
+                    value={itemSearch}
+                    onChange={(e) => {
+                      setItemSearch(e.target.value.toUpperCase());
+                      setSelectedItemSku("");
+                      setItemInventory({});
+                    }}
+                    onKeyDown={handleItemKeyDown}
+                    placeholder="Type or select Item #..."
+                    style={inputStyle}
+                  />
+
+                  {itemSearch && !selectedItemSku && filteredItemCatalog.length > 0 && (
+                    <div style={dropdownListStyle}>
+                      {filteredItemCatalog.map((item, index) => (
+                        <button
+                          key={item.sku}
+                          ref={(element) => {
+                            itemOptionRefs.current[index] = element;
+                          }}
+                          type="button"
+                          onClick={() => loadItemInventory(item.sku)}
+                          style={{
+                            ...skuOptionStyle,
+                            backgroundColor: index === itemHighlightIndex ? "#eff6ff" : "#fff",
+                          }}
+                        >
+                          <div style={{ color: "#0f172a", fontWeight: "900" }}>
+                            {item.sku}
+                          </div>
+                          <div style={{ color: "#64748b", fontSize: "0.8rem" }}>
+                            {item.description || "Saved component"}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={labelStyle}>SHELF LIFE</label>
+                  <input
+                    value={itemShelfLifeDays}
+                    onChange={(e) => setItemShelfLifeDays(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Days..."
+                    style={inputStyle}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => loadItemInventory(itemSearch)}
+                  style={downloadBtnStyle}
+                  disabled={!itemSearch}
+                >
+                  Search
+                </button>
+              </div>
+
+              {!selectedItemSku ? (
+                <div style={emptyStateStyle}>
+                  <PackageSearch size={58} color="#94a3b8" />
+                  <h2 style={emptyTitleStyle}>SEARCH ITEM #</h2>
+                  <p style={emptyTextStyle}>
+                    Search an item by number to see pallets, expiration dates and total on hand.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div style={productInfoBarStyle}>
+                    <div>
+                      <div style={productInfoLabelStyle}>ITEM #</div>
+                      <div style={productTitleStyle}>{selectedItemSku}</div>
+                    </div>
+
+                  </div>
+
+                  <div style={tableScrollStyle}>
+                    <table style={detailTableStyle}>
+                      <thead>
+                        <tr>
+                          <th style={thStyle}>SITE</th>
+                          <th style={thStyle}>LOCATION</th>
+                          <th style={thStyle}>PALLET</th>
+                          <th style={thStyle}>UOM</th>
+                          <th style={thStyle}>LOT</th>
+                          <th style={thStyle}>EXP DATE</th>
+                          <th style={thStyle}>ON HAND</th>
+                          <th style={thStyle}>SHELF LIFE</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {itemDisplayRows.length === 0 ? (
+                          <tr>
+                            <td style={tdStyle} colSpan={8}>
+                              No inventory rows found.
+                            </td>
+                          </tr>
+                        ) : (
+                          itemDisplayRows.map((row) => {
+                            if (row.empty) {
+                              return (
+                                <tr key={row.id}>
+                                  <td style={tdStyle}></td>
+                                  <td style={tdStyle}>&nbsp;</td>
+                                  <td style={tdStyle}></td>
+                                  <td style={tdStyle}></td>
+                                  <td style={tdStyle}></td>
+                                  <td style={tdStyle}></td>
+                                  <td style={tdStyle}></td>
+                                  <td style={tdStyle}></td>
+                                </tr>
+                              );
+                            }
+
+                            const days = getInventoryDaysRemaining(row.expDate);
+                            const status = getShelfLifeColor(days, Number(itemShelfLifeDays || 0));
+
+                            if (row.groupType === "site") {
+                              return (
+                                <tr key={row.id} style={siteGroupRowStyle}>
+                                  <td style={{ ...tdStyle, textAlign: "left" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setItemExpandedDates((prev) => ({
+                                          ...prev,
+                                          [row.siteKey]: !prev[row.siteKey],
+                                        }))
+                                      }
+                                      style={collapseButtonStyle}
+                                    >
+                                      {itemExpandedDates[row.siteKey] ? "∨" : ">"}
+                                    </button>
+                                    {row.siteKey}
+                                  </td>
+                                  <td style={tdStyle} colSpan={4}>
+                                    {row.rows.length} inventory row{row.rows.length === 1 ? "" : "s"}
+                                  </td>
+                                  <td style={tdStyle}>-</td>
+                                  <td style={tdStyle}>{row.onHand.toLocaleString("en-US")}</td>
+                                  <td style={tdStyle}>-</td>
+                                </tr>
+                              );
+                            }
+
+                            if (row.group) {
+                              const dateExpandKey = `${row.siteKey}-${row.dateKey}`;
+
+                              return (
+                                <tr key={row.id} style={groupRowStyle}>
+                                  <td style={tdStyle}></td>
+                                  <td style={{ ...tdStyle, textAlign: "left" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setItemExpandedDates((prev) => ({
+                                          ...prev,
+                                          [dateExpandKey]: !prev[dateExpandKey],
+                                        }))
+                                      }
+                                      style={collapseButtonStyle}
+                                    >
+                                      {itemExpandedDates[dateExpandKey] ? "∨" : ">"}
+                                    </button>
+                                    {row.location}
+                                  </td>
+                                  <td style={tdStyle}>{row.pallet}</td>
+                                  <td style={tdStyle}>-</td>
+                                  <td style={tdStyle}>{row.lot}</td>
+                                  <td
+                                    style={{
+                                      ...tdStyle,
+                                      color: status === "bad" ? "#dc2626" : "#166534",
+                                    }}
+                                  >
+                                    {formatInventoryDate(row.expDate)}
+                                  </td>
+                                  <td style={tdStyle}>{row.onHand.toLocaleString("en-US")}</td>
+                                  <td style={tdStyle}>
+                                    {Number(itemShelfLifeDays || 0) > 0 ? (
+                                      <span style={badgeStyle(status)}>
+                                        {days !== null ? `${days} DAYS` : "-"}
+                                      </span>
+                                    ) : (
+                                      "-"
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            }
+
+                            return (
+                              <tr key={row.id} style={row.child ? childRowStyle : undefined}>
+                                <td style={tdStyle}>{row.site || "-"}</td>
+                                <td
+                                  style={{
+                                    ...tdStyle,
+                                    textAlign: "left",
+                                    paddingLeft: row.child ? "32px" : "10px",
+                                  }}
+                                >
+                                  {row.child ? "↳ " : ""}
+                                  {row.location || "-"}
+                                </td>
+                                <td style={tdStyle}>{row.pallet}</td>
+                                <td style={tdStyle}>{row.uom}</td>
+                                <td style={tdStyle}>{row.lot}</td>
+                                <td
+                                  style={{
+                                    ...tdStyle,
+                                    color: status === "bad" ? "#dc2626" : "#166534",
+                                  }}
+                                >
+                                  {formatInventoryDate(row.expDate)}
+                                </td>
+                                <td style={tdStyle}>{Number(row.onHand || 0).toLocaleString("en-US")}</td>
+                                <td style={tdStyle}>
+                                  {Number(itemShelfLifeDays || 0) > 0 ? (
+                                    <span style={badgeStyle(status)}>
+                                      {days !== null ? `${days} DAYS` : "-"}
+                                    </span>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+
+                        {selectedItemSku && (
+                          <tr style={totalRowStyle}>
+                            <td style={{ ...tdStyle, textAlign: "right" }} colSpan={6}>
+                              TOTAL ON HAND
+                            </td>
+                            <td style={tdStyle}>{itemTotalOnHand.toLocaleString("en-US")}</td>
+                            <td style={tdStyle}></td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={hintBoxStyle}>
+                    Item suggestions come from saved BOM components and component options.
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {selectedDetailComponent && (
+        {activeModule === "bom" && selectedDetailComponent && (
           <div style={{ marginTop: "22px" }}>
             <div style={dividerStyle}>CLICKED ITEM DETAILS</div>
 
@@ -1017,8 +1726,13 @@ export default function WorkabilityCalculator() {
                     <input
                       value={detailShelfLifeDays}
                       onChange={(e) => {
-                        setDetailShelfLifeDays(e.target.value.replace(/\D/g, ""));
+                        const nextValue = e.target.value.replace(/\D/g, "");
+                        setDetailShelfLifeDays(nextValue);
                         setShelfLifeApplied(false);
+
+                        if (!nextValue && selectedDetailComponent && isCandyComponent(selectedDetailComponent)) {
+                          setCandyShelfLifeDays("");
+                        }
                       }}
                       placeholder="Enter days"
                       style={{
@@ -1168,7 +1882,7 @@ export default function WorkabilityCalculator() {
                           );
                         }
 
-                        const days = getDaysRemaining(row.expDate);
+                        const days = getInventoryDaysRemaining(row.expDate);
                         const status = getShelfLifeColor(days, shelfLifeDays);
                         const blocked =
                           shelfLifeApplied &&
@@ -1238,7 +1952,7 @@ export default function WorkabilityCalculator() {
                                   color: status === "bad" ? "#dc2626" : "#166534",
                                 }}
                               >
-                                {formatDate(row.expDate)}
+                                {formatInventoryDate(row.expDate)}
                               </td>
                               <td style={tdStyle}>{row.onHand.toLocaleString("en-US")}</td>
                               <td style={tdStyle}>
@@ -1281,7 +1995,7 @@ export default function WorkabilityCalculator() {
                                 color: status === "bad" ? "#dc2626" : "#166534",
                               }}
                             >
-                              {formatDate(row.expDate)}
+                              {formatInventoryDate(row.expDate)}
                             </td>
                             <td style={tdStyle}>{row.onHand}</td>
                             <td style={tdStyle}>
@@ -1566,6 +2280,41 @@ const topControlsStyle = {
   display: "grid",
   gridTemplateColumns: "230px 230px 490px 100px",
   gap: "24px",
+  alignItems: "end",
+  marginBottom: "30px",
+};
+
+const moduleTabsStyle = {
+  display: "flex",
+  gap: "8px",
+  marginBottom: "22px",
+  borderBottom: "1px solid #e2e8f0",
+  paddingBottom: "12px",
+};
+
+const moduleTabStyle = {
+  height: "33px",
+  border: "1px solid #cbd5e1",
+  backgroundColor: "#fff",
+  color: "#334155",
+  borderRadius: "6px",
+  padding: "0 18px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "inset 0 1px 1px rgba(15,23,42,0.03)",
+};
+
+const moduleTabActiveStyle = {
+  background: "linear-gradient(180deg, #ef2b2b 0%, #dc2626 100%)",
+  color: "#fff",
+  borderColor: "#dc2626",
+  boxShadow: "0 4px 12px rgba(220,38,38,0.18)",
+};
+
+const itemControlsStyle = {
+  display: "grid",
+  gridTemplateColumns: "190px 210px 1fr 150px 96px",
+  gap: "18px",
   alignItems: "end",
   marginBottom: "30px",
 };
@@ -1913,6 +2662,12 @@ const productInfoLabelStyle = {
 
 const qtyNeededBoxStyle = {
   maxWidth: "230px",
+};
+
+
+const totalRowStyle = {
+  backgroundColor: "#f8fafc",
+  fontWeight: "950",
 };
 
 const statusCardStyle = {

@@ -7,6 +7,56 @@ import {
   normalizeKey,
 } from "./workabilityHelpers";
 
+const parseInventoryDateLocal = (value) => {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const text = String(value).trim();
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return new Date(
+      Number(isoMatch[1]),
+      Number(isoMatch[2]) - 1,
+      Number(isoMatch[3])
+    );
+  }
+
+  const usMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (usMatch) {
+    return new Date(
+      Number(usMatch[3]),
+      Number(usMatch[1]) - 1,
+      Number(usMatch[2])
+    );
+  }
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+};
+
+const formatInventoryDate = (value) => {
+  const date = parseInventoryDateLocal(value);
+  if (!date) return "-";
+
+  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+};
+
+const getInventoryDaysRemaining = (value) => {
+  const date = parseInventoryDateLocal(value);
+  if (!date) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Math.ceil((date.getTime() - today.getTime()) / 86400000);
+};
+
 const getRowTypeFill = (value) => {
   if (value === "SITE GROUP") return { fgColor: { rgb: "DBEAFE" } };
   if (value === "EXP DATE GROUP") return { fgColor: { rgb: "F1F5F9" } };
@@ -176,7 +226,7 @@ const buildVisibleDetailRowsForExport = ({
       }
 
       if (row.groupType === "date" || row.group) {
-        const days = getDaysRemaining(row.expDate);
+        const days = getInventoryDaysRemaining(row.expDate);
         const blocked =
           shelfLifeApplied &&
           shelfLifeDays > 0 &&
@@ -191,7 +241,7 @@ const buildVisibleDetailRowsForExport = ({
               row.pallet || "-",
               row.uom || "-",
               row.lot || "-",
-              formatDate(row.expDate),
+              formatInventoryDate(row.expDate),
               Number(row.onHand || 0),
               shelfLifeApplied && days !== null ? `${days} DAYS` : "-",
               blocked
@@ -204,7 +254,7 @@ const buildVisibleDetailRowsForExport = ({
               row.pallet || "-",
               row.uom || "-",
               row.lot || "-",
-              formatDate(row.expDate),
+              formatInventoryDate(row.expDate),
               Number(row.onHand || 0),
               shelfLifeApplied && days !== null ? `${days} DAYS` : "-",
               blocked
@@ -213,7 +263,7 @@ const buildVisibleDetailRowsForExport = ({
             ];
       }
 
-      const days = getDaysRemaining(row.expDate);
+      const days = getInventoryDaysRemaining(row.expDate);
       const blocked =
         shelfLifeApplied &&
         shelfLifeDays > 0 &&
@@ -228,7 +278,7 @@ const buildVisibleDetailRowsForExport = ({
             row.pallet || "-",
             row.uom || "-",
             row.lot || "-",
-            formatDate(row.expDate),
+            formatInventoryDate(row.expDate),
             Number(row.onHand || 0),
             shelfLifeApplied && days !== null ? `${days} DAYS` : "-",
             blocked
@@ -241,7 +291,7 @@ const buildVisibleDetailRowsForExport = ({
             row.pallet || "-",
             row.uom || "-",
             row.lot || "-",
-            formatDate(row.expDate),
+            formatInventoryDate(row.expDate),
             Number(row.onHand || 0),
             shelfLifeApplied && days !== null ? `${days} DAYS` : "-",
             blocked
@@ -260,7 +310,7 @@ const buildFlatDetailRowsForExport = ({
   getCasesPossible,
 }) => {
   return sortedDetailRows.map((row) => {
-    const days = getDaysRemaining(row.expDate);
+    const days = getInventoryDaysRemaining(row.expDate);
     const blocked =
       shelfLifeApplied &&
       shelfLifeDays > 0 &&
@@ -275,7 +325,7 @@ const buildFlatDetailRowsForExport = ({
           row.pallet,
           row.uom,
           row.lot,
-          formatDate(row.expDate),
+          formatInventoryDate(row.expDate),
           row.onHand,
           shelfLifeApplied && days !== null ? `${days} DAYS` : "-",
           blocked
@@ -288,7 +338,7 @@ const buildFlatDetailRowsForExport = ({
           row.pallet,
           row.uom,
           row.lot,
-          formatDate(row.expDate),
+          formatInventoryDate(row.expDate),
           row.onHand,
           shelfLifeApplied && days !== null ? `${days} DAYS` : "-",
           blocked

@@ -12,6 +12,7 @@ export const SITE_OPTIONS_BY_CUSTOMER = {
   ],
   BAZOOKA: [
     "TOPPS",
+    "TOPPS PXP",
     "TOPPS DEFECTIVE",
     "TOPPS HOLD",
     "TOPPS INV",
