@@ -735,15 +735,14 @@ function buildManualLic(value, palletNumber) {
 function formatDateCodeTyping(value, inputType = '') {
   const raw = String(value || '').replace(/[^\d/]/g, '').slice(0, 10);
 
-  if (String(inputType).startsWith('delete')) return raw;
+  // Let Backspace/Delete behave like a normal text field.
+  if (String(inputType || '').startsWith('delete')) return raw;
 
   const digits = raw.replace(/\D/g, '').slice(0, 8);
 
   if (!digits) return '';
   if (digits.length <= 2) return digits;
-  if (digits.length <= 4) {
-    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  }
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
@@ -752,50 +751,52 @@ function formatDateCodeInput(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
-  let month = '';
-  let day = '';
-  let year = '';
+  let mm = '';
+  let dd = '';
+  let yyyy = '';
 
   if (raw.includes('/')) {
     const parts = raw.split('/').map((part) => part.trim());
     if (parts.length !== 3) return raw;
 
-    [month, day, year] = parts;
+    mm = parts[0];
+    dd = parts[1];
+    yyyy = parts[2];
   } else {
     const digits = raw.replace(/\D/g, '');
 
     if (digits.length === 6) {
-      month = digits.slice(0, 2);
-      day = digits.slice(2, 4);
-      year = `20${digits.slice(4, 6)}`;
+      mm = digits.slice(0, 2);
+      dd = digits.slice(2, 4);
+      yyyy = `20${digits.slice(4, 6)}`;
     } else if (digits.length === 8) {
-      month = digits.slice(0, 2);
-      day = digits.slice(2, 4);
-      year = digits.slice(4, 8);
+      mm = digits.slice(0, 2);
+      dd = digits.slice(2, 4);
+      yyyy = digits.slice(4, 8);
     } else {
       return raw;
     }
   }
 
-  if (year.length === 2) year = `20${year}`;
+  if (yyyy.length === 2) {
+    yyyy = `20${yyyy}`;
+  }
 
-  const monthNumber = parseInt(month, 10);
-  const dayNumber = parseInt(day, 10);
-  const cleanYear = String(year).replace(/\D/g, '');
+  const monthNumber = parseInt(mm, 10);
+  const dayNumber = parseInt(dd, 10);
+  const year = String(yyyy || '').replace(/\D/g, '');
 
   if (
     Number.isNaN(monthNumber) ||
     Number.isNaN(dayNumber) ||
-    cleanYear.length !== 4 ||
-    monthNumber < 1 ||
-    monthNumber > 12 ||
-    dayNumber < 1 ||
-    dayNumber > 31
+    year.length !== 4
   ) {
     return raw;
   }
 
-  return `${String(monthNumber).padStart(2, '0')}/${String(dayNumber).padStart(2, '0')}/${cleanYear}`;
+  return `${String(monthNumber).padStart(2, '0')}/${String(
+    dayNumber
+  ).padStart(2, '0')}/${year}`;
 }
 
 function isValidDateCode(value) {
@@ -806,7 +807,7 @@ function cleanZplValue(value) {
   return String(value || '').replace(/[\^~]/g, ' ').trim();
 }
 
-function buildZebraLabelZpl(label) {
+function buildZebraLabelZpl(label, printer) {
   const item = cleanZplValue(label.item);
   const qty = cleanZplValue(label.qty);
   const lot = cleanZplValue(label.lot);
@@ -815,47 +816,61 @@ function buildZebraLabelZpl(label) {
   const site = cleanZplValue(label.site);
   const workOrder = cleanZplValue(label.workOrder);
 
+  const isSystem234 = printer === 'system234';
+  const scale = isSystem234 ? 300 / 203 : 1;
+  const dot = (value) => Math.round(value * scale);
+
+  const printWidth = isSystem234 ? 1200 : 812;
+  const labelLength = isSystem234 ? 2400 : 1624;
+  const labelHomeY = isSystem234 ? dot(120) : 120;
+  const barcodeModuleWidth = isSystem234 ? 3 : 2;
+
   return `^XA
 ^CI28
-^PW812
-^LL1624
-^LH0,120
-^MD18
-^PR4
-^FO70,70^A0N,30,30^FDITEM#:^FS
-^FO230,45^BY2,2,70^BCN,70,N,N,N^FD${item}^FS
-^FO230,122^A0N,44,44^FD${item}^FS
-^FO70,250^A0N,30,30^FDQTY:^FS
-^FO230,220^BY2,2,60^BCN,60,N,N,N^FD${qty}^FS
-^FO230,292^A0N,44,44^FD${qty}^FS
-^FO70,420^A0N,30,30^FDLOT:^FS
-^FO230,390^BY2,2,70^BCN,70,N,N,N^FD${lot}^FS
-^FO230,468^A0N,44,44^FD${lot}^FS
-^FO70,600^A0N,28,28^FDDATE^FS
-^FO70,630^A0N,28,28^FDCODE:^FS
-^FO230,585^BY2,2,70^BCN,70,N,N,N^FD${dateCode}^FS
-^FO230,665^A0N,44,44^FD${dateCode}^FS
-^FO70,820^A0N,30,30^FDLIC#:^FS
-^FO230,790^BY2,2,75^BCN,75,N,N,N^FD${lic}^FS
-^FO230,875^A0N,42,42^FD${lic}^FS
-^FO70,1020^A0N,30,30^FDSITE:^FS
-^FO230,990^BY2,2,65^BCN,65,N,N,N^FD${site}^FS
-^FO230,1065^A0N,38,38^FD${site}^FS
-^FO70,1200^A0N,30,30^FDWO:^FS
-^FO230,1170^BY2,2,70^BCN,70,N,N,N^FD${workOrder}^FS
-^FO230,1250^A0N,38,38^FD${workOrder}^FS
+~SD15
+^PR6
+^MTT
+^MNY
+^MMT
+^PW${printWidth}
+^LL${labelLength}
+^LH0,${labelHomeY}
+^FO${dot(70)},${dot(70)}^A0N,${dot(30)},${dot(30)}^FDITEM#:^FS
+^FO${dot(230)},${dot(45)}^BY${barcodeModuleWidth},2,${dot(70)}^BCN,${dot(70)},N,N,N^FD${item}^FS
+^FO${dot(230)},${dot(122)}^A0N,${dot(44)},${dot(44)}^FD${item}^FS
+^FO${dot(70)},${dot(250)}^A0N,${dot(30)},${dot(30)}^FDQTY:^FS
+^FO${dot(230)},${dot(220)}^BY${barcodeModuleWidth},2,${dot(60)}^BCN,${dot(60)},N,N,N^FD${qty}^FS
+^FO${dot(230)},${dot(292)}^A0N,${dot(44)},${dot(44)}^FD${qty}^FS
+^FO${dot(70)},${dot(420)}^A0N,${dot(30)},${dot(30)}^FDLOT:^FS
+^FO${dot(230)},${dot(390)}^BY${barcodeModuleWidth},2,${dot(70)}^BCN,${dot(70)},N,N,N^FD${lot}^FS
+^FO${dot(230)},${dot(468)}^A0N,${dot(44)},${dot(44)}^FD${lot}^FS
+^FO${dot(70)},${dot(600)}^A0N,${dot(28)},${dot(28)}^FDDATE^FS
+^FO${dot(70)},${dot(630)}^A0N,${dot(28)},${dot(28)}^FDCODE:^FS
+^FO${dot(230)},${dot(585)}^BY${barcodeModuleWidth},2,${dot(70)}^BCN,${dot(70)},N,N,N^FD${dateCode}^FS
+^FO${dot(230)},${dot(665)}^A0N,${dot(44)},${dot(44)}^FD${dateCode}^FS
+^FO${dot(70)},${dot(820)}^A0N,${dot(30)},${dot(30)}^FDLIC#:^FS
+^FO${dot(230)},${dot(790)}^BY${barcodeModuleWidth},2,${dot(75)}^BCN,${dot(75)},N,N,N^FD${lic}^FS
+^FO${dot(230)},${dot(875)}^A0N,${dot(42)},${dot(42)}^FD${lic}^FS
+^FO${dot(70)},${dot(1020)}^A0N,${dot(30)},${dot(30)}^FDSITE:^FS
+^FO${dot(230)},${dot(990)}^BY${barcodeModuleWidth},2,${dot(65)}^BCN,${dot(65)},N,N,N^FD${site}^FS
+^FO${dot(230)},${dot(1065)}^A0N,${dot(38)},${dot(38)}^FD${site}^FS
+^FO${dot(70)},${dot(1200)}^A0N,${dot(30)},${dot(30)}^FDWO:^FS
+^FO${dot(230)},${dot(1170)}^BY${barcodeModuleWidth},2,${dot(70)}^BCN,${dot(70)},N,N,N^FD${workOrder}^FS
+^FO${dot(230)},${dot(1250)}^A0N,${dot(38)},${dot(38)}^FD${workOrder}^FS
 ^XZ`;
 }
 
 async function sendLabelsToPrinter(labels, printer) {
-  const zpl = labels.map(buildZebraLabelZpl).join('\n');
+  const zpl = labels
+    .map((label) => buildZebraLabelZpl(label, printer))
+    .join('\n');
 
   if (!zpl.trim()) {
     throw new Error('Generated ZPL is empty.');
   }
 
   try {
-    const response = await fetch('http://localhost:5050/print', {
+    const response = await fetch('http://10.1.3.70:5050/print', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
