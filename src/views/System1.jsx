@@ -288,15 +288,30 @@ export default function System1() {
   const [qcLanguage, setQcLanguage] = useState('en');
 
   // LABELS
+  const [labelMode, setLabelMode] = useState('auto');
+
   const [labelData, setLabelData] = useState({
     shift: '1',
     job: 'A',
     qty: '',
     dateCode: '',
-    labelQty: '1',
+    labelQty: '2',
     palletQty: '1',
     startingPallet: '1',
     misc: ''
+});
+
+  const [manualLabelData, setManualLabelData] = useState({
+    item: '',
+    qty: '',
+    lot: '',
+    dateCode: '',
+    lic: '',
+    site: '',
+    workOrder: '',
+    labelQty: '2',
+    palletQty: '1',
+    startingPallet: '1'
 });
 
   const shift1Jobs = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M'];
@@ -494,10 +509,25 @@ export default function System1() {
     labelData.job,
     generatedLot,
     generatedWorkOrder,
+    labelMode,
+    manualLabelData.item,
+    manualLabelData.qty,
+    manualLabelData.lot,
+    manualLabelData.dateCode,
+    manualLabelData.lic,
+    manualLabelData.site,
+    manualLabelData.workOrder,
+    manualLabelData.labelQty,
+    manualLabelData.palletQty,
+    manualLabelData.startingPallet,
   ]);
 
   const handleLabelChange = (field, value) => {
     setLabelData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleManualLabelChange = (field, value) => {
+    setManualLabelData((prev) => ({ ...prev, [field]: value }));
   };
 
   const validateLabelData = () => {
@@ -605,6 +635,87 @@ export default function System1() {
       } catch (error) {
       console.error('Label print error:', error);
       alert(`Unable to print labels: ${error.message}`);
+    }
+  };
+
+
+  const safeManualLabelQty = Math.max(parseInt(manualLabelData.labelQty, 10) || 1, 1);
+  const safeManualPalletQty = Math.max(parseInt(manualLabelData.palletQty, 10) || 1, 1);
+  const safeManualStartingPallet = Math.max(parseInt(manualLabelData.startingPallet, 10) || 1, 1);
+
+  const getManualLicForPallet = (licValue, palletNumber) => {
+    const lic = String(licValue || '').trim();
+    if (!lic) return '';
+
+    // When the manually entered LIC ends in -01, -02, etc., update only
+    // that pallet suffix. Other custom LIC formats remain exactly as entered.
+    if (/-\d+$/.test(lic)) {
+      return lic.replace(/-\d+$/, `-${String(palletNumber).padStart(2, '0')}`);
+    }
+
+    return lic;
+  };
+
+  const generatedManualLabels = [];
+
+  for (let palletIndex = 0; palletIndex < safeManualPalletQty; palletIndex += 1) {
+    const palletNumber = safeManualStartingPallet + palletIndex;
+
+    for (let copyIndex = 0; copyIndex < safeManualLabelQty; copyIndex += 1) {
+      generatedManualLabels.push({
+        ...manualLabelData,
+        id: `manual-${palletNumber}-${copyIndex + 1}`,
+        palletNumber,
+        copyNumber: copyIndex + 1,
+        lic: getManualLicForPallet(manualLabelData.lic, palletNumber),
+        dateCode: formatDateCodeInput(manualLabelData.dateCode)
+      });
+    }
+  }
+
+  const printManualLabel = async () => {
+    const manualLabel = generatedManualLabels[0];
+
+    if (!manualLabel.item.trim()) {
+      alert('Enter Item# before printing.');
+      return;
+    }
+
+    if (!manualLabel.qty.trim()) {
+      alert('Enter Qty before printing.');
+      return;
+    }
+
+    if (
+      manualLabel.dateCode &&
+      !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(manualLabel.dateCode)
+    ) {
+      alert('Date Code must use M/D/YYYY format.');
+      return;
+    }
+
+    const zpl = generatedManualLabels.map(buildZebraLabelZpl).join('\n');
+
+    try {
+      if (!zpl || !zpl.trim()) {
+        throw new Error('Generated ZPL is empty.');
+      }
+
+      const response = await fetch('http://localhost:5050/print', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+},
+        body: JSON.stringify({ zpl })
+});
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Unable to print label.');
+      }
+    } catch (error) {
+      console.error('Manual label print error:', error);
+      alert(`Unable to print label: ${error.message}`);
     }
   };
 
@@ -1566,162 +1677,399 @@ Entonces puedes comenzar a preparar y completar toda la documentación y papeler
                 }
               `}</style>
 
-              <div className="screen-label-workspace labels-screen-wrap">
-                <div
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginBottom: '22px'
+}}
+              >
+                <button
+                  onClick={() => setLabelMode('auto')}
                   style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'flex-start',
-                    gap: '24px',
-                    flexWrap: 'wrap'
+                    ...labelModeButton,
+                    backgroundColor: labelMode === 'auto' ? '#dc2626' : '#e5e7eb',
+                    color: labelMode === 'auto' ? '#fff' : '#334155',
+                    borderColor: labelMode === 'auto' ? '#dc2626' : '#cbd5e1'
 }}
                 >
-                  <div
-                    style={{
-                      width: '360px',
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '16px',
-                      boxShadow: '0 10px 24px rgba(15,23,42,0.08)',
-                      overflow: 'hidden'
+                  Auto Label
+                </button>
+
+                <button
+                  onClick={() => setLabelMode('manual')}
+                  style={{
+                    ...labelModeButton,
+                    backgroundColor: labelMode === 'manual' ? '#dc2626' : '#e5e7eb',
+                    color: labelMode === 'manual' ? '#fff' : '#334155',
+                    borderColor: labelMode === 'manual' ? '#dc2626' : '#cbd5e1'
 }}
-                  >
-                    <div
-                      style={{
-                        backgroundColor: '#e5e7eb',
-                        color: '#111827',
-                        padding: '14px 18px',
-                        fontSize: '1.05rem',
-                        fontWeight: '900',
-                        borderBottom: '1px solid #cbd5e1'
-}}
-                    >
-                      Label Setup
-                    </div>
+                >
+                  Manual Label
+                </button>
+              </div>
 
-                    <div style={{ padding: '18px', display: 'grid', gap: '14px' }}>
-                      <CompactLabelControl label="Shift">
-                        <select
-                          value={labelData.shift}
-                          onChange={(e) => handleLabelChange('shift', e.target.value)}
-                          style={compactLabelInput}
-                        >
-                          <option value="1">Shift 1</option>
-                          <option value="2">Shift 2</option>
-                        </select>
-                      </CompactLabelControl>
-
-                      <CompactLabelControl label="Job">
-                        <select
-                          value={labelData.job}
-                          onChange={(e) => handleLabelChange('job', e.target.value)}
-                          style={compactLabelInput}
-                        >
-                          {availableLabelJobs.map((job) => (
-                            <option key={job} value={job}>Job {job}</option>
-                          ))}
-                        </select>
-                      </CompactLabelControl>
-
-                      <CompactLabelControl label="Label Qty">
-                        <input
-                          type="number"
-                          min="1"
-                          value={labelData.labelQty}
-                          onChange={(e) => handleLabelChange('labelQty', e.target.value)}
-                          style={compactLabelInput}
-                        />
-                      </CompactLabelControl>
-
-                      <CompactLabelControl label="Pallet Qty">
-                        <input
-                          type="number"
-                          min="1"
-                          value={labelData.palletQty}
-                          onChange={(e) => handleLabelChange('palletQty', e.target.value)}
-                          style={compactLabelInput}
-                        />
-                      </CompactLabelControl>
-
-                      <CompactLabelControl label="Starting Pallet #">
-                        <input
-                          type="number"
-                          min="1"
-                          value={labelData.startingPallet}
-                          onChange={(e) => handleLabelChange('startingPallet', e.target.value)}
-                          style={compactLabelInput}
-                        />
-                      </CompactLabelControl>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      backgroundColor: '#e2e8f0',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '18px',
-                      padding: '18px',
-                      boxShadow: '0 12px 30px rgba(15,23,42,0.14)'
-}}
-                  >
-                    <div
-                      style={{
-                        backgroundColor: '#cbd5e1',
-                        color: '#111827',
-                        padding: '12px 16px',
-                        fontSize: '1.35rem',
-                        fontWeight: '900',
-                        textAlign: 'center',
-                        borderRadius: '12px 12px 0 0',
-                        border: '1px solid #94a3b8',
-                        borderBottom: 'none'
-}}
-                    >
-                      1NICO Pallet Label
-                    </div>
-
-                    <div
-                      style={{
-                        backgroundColor: '#f8fafc',
-                        border: '1px solid #94a3b8',
-                        borderRadius: '0 0 12px 12px',
-                        padding: '18px'
-}}
-                    >
-                      <EditablePalletPreviewLabel
-                        label={previewLabel}
-                        labelData={labelData}
-                        handleLabelChange={handleLabelChange}
-                        formatDateCodeInput={formatDateCodeInput}
-                        formatDateCodeTyping={formatDateCodeTyping}
-                      />
-                    </div>
-
+              {labelMode === 'auto' ? (
+                <>
+                  <div className="screen-label-workspace labels-screen-wrap">
                     <div
                       style={{
                         display: 'flex',
                         justifyContent: 'center',
-                        marginTop: '16px'
+                        alignItems: 'flex-start',
+                        gap: '24px',
+                        flexWrap: 'wrap'
 }}
                     >
-                      <button onClick={printLabels} style={labelButtonRed}>
-                        Print
-                      </button>
+                      <div
+                        style={{
+                          width: '360px',
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '16px',
+                          boxShadow: '0 10px 24px rgba(15,23,42,0.08)',
+                          overflow: 'hidden'
+}}
+                      >
+                        <div
+                          style={{
+                            backgroundColor: '#e5e7eb',
+                            color: '#111827',
+                            padding: '14px 18px',
+                            fontSize: '1.05rem',
+                            fontWeight: '900',
+                            borderBottom: '1px solid #cbd5e1'
+}}
+                        >
+                          Label Setup
+                        </div>
+
+                        <div style={{ padding: '18px', display: 'grid', gap: '14px' }}>
+                          <CompactLabelControl label="Shift">
+                            <select
+                              value={labelData.shift}
+                              onChange={(e) => handleLabelChange('shift', e.target.value)}
+                              style={compactLabelInput}
+                            >
+                              <option value="1">Shift 1</option>
+                              <option value="2">Shift 2</option>
+                            </select>
+                          </CompactLabelControl>
+
+                          <CompactLabelControl label="Job">
+                            <select
+                              value={labelData.job}
+                              onChange={(e) => handleLabelChange('job', e.target.value)}
+                              style={compactLabelInput}
+                            >
+                              {availableLabelJobs.map((job) => (
+                                <option key={job} value={job}>Job {job}</option>
+                              ))}
+                            </select>
+                          </CompactLabelControl>
+
+                          <CompactLabelControl label="Label Qty">
+                            <input
+                              type="number"
+                              min="1"
+                              value={labelData.labelQty}
+                              onChange={(e) => handleLabelChange('labelQty', e.target.value)}
+                              style={compactLabelInput}
+                            />
+                          </CompactLabelControl>
+
+                          <CompactLabelControl label="Pallet Qty">
+                            <input
+                              type="number"
+                              min="1"
+                              value={labelData.palletQty}
+                              onChange={(e) => handleLabelChange('palletQty', e.target.value)}
+                              style={compactLabelInput}
+                            />
+                          </CompactLabelControl>
+
+                          <CompactLabelControl label="Starting Pallet #">
+                            <input
+                              type="number"
+                              min="1"
+                              value={labelData.startingPallet}
+                              onChange={(e) => handleLabelChange('startingPallet', e.target.value)}
+                              style={compactLabelInput}
+                            />
+                          </CompactLabelControl>
+                        </div>
+                      </div>
+
+                      <LabelPreviewShell>
+                        <EditablePalletPreviewLabel
+                          label={previewLabel}
+                          labelData={labelData}
+                          handleLabelChange={handleLabelChange}
+                          formatDateCodeInput={formatDateCodeInput}
+                          formatDateCodeTyping={formatDateCodeTyping}
+                        />
+
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            marginTop: '16px'
+}}
+                        >
+                          <button onClick={printLabels} style={labelButtonRed}>
+                            Print
+                          </button>
+                        </div>
+                      </LabelPreviewShell>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div id="labels-print-area" className="print-only-labels">
-                {generatedLabels.map((label) => (
-                  <PalletPrintLabel key={`${label.palletNumber}-${label.copyNumber}`} label={label} />
-                ))}
-              </div>
+                  <div id="labels-print-area" className="print-only-labels">
+                    {generatedLabels.map((label) => (
+                      <PalletPrintLabel
+                        key={`${label.palletNumber}-${label.copyNumber}`}
+                        label={label}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="screen-label-workspace labels-screen-wrap">
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'flex-start',
+                      gap: '24px',
+                      flexWrap: 'wrap'
+}}
+                  >
+                    <div
+                      style={{
+                        width: '360px',
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '16px',
+                        boxShadow: '0 10px 24px rgba(15,23,42,0.08)',
+                        overflow: 'hidden'
+}}
+                    >
+                      <div
+                        style={{
+                          backgroundColor: '#e5e7eb',
+                          color: '#111827',
+                          padding: '14px 18px',
+                          fontSize: '1.05rem',
+                          fontWeight: '900',
+                          borderBottom: '1px solid #cbd5e1'
+}}
+                      >
+                        Label Setup
+                      </div>
+
+                      <div style={{ padding: '18px', display: 'grid', gap: '14px' }}>
+                        <CompactLabelControl label="Label Qty">
+                          <input
+                            type="number"
+                            min="1"
+                            value={manualLabelData.labelQty}
+                            onChange={(e) => handleManualLabelChange('labelQty', e.target.value)}
+                            style={compactLabelInput}
+                          />
+                        </CompactLabelControl>
+
+                        <CompactLabelControl label="Pallet Qty">
+                          <input
+                            type="number"
+                            min="1"
+                            value={manualLabelData.palletQty}
+                            onChange={(e) => handleManualLabelChange('palletQty', e.target.value)}
+                            style={compactLabelInput}
+                          />
+                        </CompactLabelControl>
+
+                        <CompactLabelControl label="Starting Pallet #">
+                          <input
+                            type="number"
+                            min="1"
+                            value={manualLabelData.startingPallet}
+                            onChange={(e) => handleManualLabelChange('startingPallet', e.target.value)}
+                            style={compactLabelInput}
+                          />
+                        </CompactLabelControl>
+                      </div>
+                    </div>
+
+                    <LabelPreviewShell>
+                      <ManualPalletPreviewLabel
+                        label={manualLabelData}
+                        handleChange={handleManualLabelChange}
+                        formatDateCodeInput={formatDateCodeInput}
+                        formatDateCodeTyping={formatDateCodeTyping}
+                      />
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'center',
+                          marginTop: '16px'
+}}
+                      >
+                        <button onClick={printManualLabel} style={labelButtonRed}>
+                          Print
+                        </button>
+                      </div>
+                    </LabelPreviewShell>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
         </div>
       </div>
+    </div>
+  );
+}
+
+function LabelPreviewShell({ children }) {
+  return (
+    <div
+      style={{
+        backgroundColor: '#e2e8f0',
+        border: '1px solid #cbd5e1',
+        borderRadius: '18px',
+        padding: '18px',
+        boxShadow: '0 12px 30px rgba(15,23,42,0.14)'
+}}
+    >
+      <div
+        style={{
+          backgroundColor: '#cbd5e1',
+          color: '#111827',
+          padding: '12px 16px',
+          fontSize: '1.35rem',
+          fontWeight: '900',
+          textAlign: 'center',
+          borderRadius: '12px 12px 0 0',
+          border: '1px solid #94a3b8',
+          borderBottom: 'none'
+}}
+      >
+        1NICO Pallet Label
+      </div>
+
+      <div
+        style={{
+          backgroundColor: '#f8fafc',
+          border: '1px solid #94a3b8',
+          borderRadius: '0 0 12px 12px',
+          padding: '18px'
+}}
+      >
+        {children[0]}
+      </div>
+
+      {children[1]}
+    </div>
+  );
+}
+
+function ManualPalletPreviewLabel({
+  label,
+  handleChange,
+  formatDateCodeInput,
+  formatDateCodeTyping
+}) {
+  const previewSuffix = 'manual-preview-label';
+
+  return (
+    <div
+      style={{
+        width: '4in',
+        minHeight: '8in',
+        backgroundColor: '#fff',
+        color: '#000',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        padding: '0.28in 0.28in',
+        boxSizing: 'border-box',
+        fontFamily: 'Arial, sans-serif',
+        overflow: 'hidden'
+}}
+    >
+      <PreviewBarcodeRow
+        label="ITEM#"
+        value={label.item}
+        barcodeId={`barcode-item-${previewSuffix}`}
+        editable
+        onChange={(value) => handleChange('item', value)}
+        placeholder="Item#"
+        big
+      />
+
+      <PreviewBarcodeRow
+        label="QTY"
+        value={label.qty}
+        barcodeId={`barcode-qty-${previewSuffix}`}
+        editable
+        onChange={(value) => handleChange('qty', value)}
+        placeholder="Qty"
+      />
+
+      <PreviewBarcodeRow
+        label="LOT"
+        value={label.lot}
+        barcodeId={`barcode-lot-${previewSuffix}`}
+        editable
+        onChange={(value) => handleChange('lot', value)}
+        placeholder="Lot"
+        big
+      />
+
+      <PreviewBarcodeRow
+        label="DATE CODE"
+        value={label.dateCode}
+        barcodeId={`barcode-date-${previewSuffix}`}
+        editable
+        onChange={(value, event) =>
+          handleChange(
+            'dateCode',
+            formatDateCodeTyping(value, event?.nativeEvent?.inputType)
+          )
+        }
+        onBlur={(value) => handleChange('dateCode', formatDateCodeInput(value))}
+        placeholder="M/D/YYYY"
+      />
+
+      <PreviewBarcodeRow
+        label="LIC#"
+        value={label.lic}
+        barcodeId={`barcode-lic-${previewSuffix}`}
+        editable
+        onChange={(value) => handleChange('lic', value)}
+        placeholder="LIC#"
+      />
+
+      <PreviewBarcodeRow
+        label="SITE"
+        value={label.site}
+        barcodeId={`barcode-site-${previewSuffix}`}
+        editable
+        onChange={(value) => handleChange('site', value)}
+        placeholder="Site"
+        small
+      />
+
+      <PreviewBarcodeRow
+        label="WO"
+        value={label.workOrder}
+        barcodeId={`barcode-wo-${previewSuffix}`}
+        editable
+        onChange={(value) => handleChange('workOrder', value)}
+        placeholder="Work Order"
+      />
     </div>
   );
 }
@@ -1972,6 +2320,17 @@ function LabelBarcodeRow({ label, value, barcodeId, big, small }) {
     </div>
   );
 }
+
+const labelModeButton = {
+  minWidth: '140px',
+  border: '1px solid #cbd5e1',
+  borderRadius: '9px',
+  padding: '10px 18px',
+  fontSize: '0.92rem',
+  fontWeight: '900',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease'
+};
 
 const compactLabelInput = {
   width: '100%',
