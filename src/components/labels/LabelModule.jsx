@@ -733,17 +733,26 @@ function buildManualLic(value, palletNumber) {
 }
 
 function formatDateCodeTyping(value, inputType = '') {
-  const raw = String(value || '').replace(/[^\d/]/g, '').slice(0, 10);
+  const raw = String(value || '')
+    .replace(/[^\d/]/g, '')
+    .slice(0, 10);
 
-  // Let Backspace/Delete behave like a normal text field.
-  if (String(inputType || '').startsWith('delete')) return raw;
+  // Keep Backspace/Delete natural so the operator can correct the date.
+  if (String(inputType || '').startsWith('delete')) {
+    return raw;
+  }
 
   const digits = raw.replace(/\D/g, '').slice(0, 8);
 
   if (!digits) return '';
   if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  if (digits.length <= 4) {
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  }
 
+  // While typing, keep the year exactly as entered:
+  // 032027 -> 03/20/27
+  // 03202027 -> 03/20/2027
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
@@ -751,52 +760,75 @@ function formatDateCodeInput(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
-  let mm = '';
-  let dd = '';
-  let yyyy = '';
+  let month = '';
+  let day = '';
+  let year = '';
 
   if (raw.includes('/')) {
     const parts = raw.split('/').map((part) => part.trim());
-    if (parts.length !== 3) return raw;
 
-    mm = parts[0];
-    dd = parts[1];
-    yyyy = parts[2];
+    if (parts.length !== 3) {
+      return raw;
+    }
+
+    [month, day, year] = parts;
   } else {
     const digits = raw.replace(/\D/g, '');
 
+    // MMDDYY -> MM/DD/20YY
     if (digits.length === 6) {
-      mm = digits.slice(0, 2);
-      dd = digits.slice(2, 4);
-      yyyy = `20${digits.slice(4, 6)}`;
-    } else if (digits.length === 8) {
-      mm = digits.slice(0, 2);
-      dd = digits.slice(2, 4);
-      yyyy = digits.slice(4, 8);
+      month = digits.slice(0, 2);
+      day = digits.slice(2, 4);
+      year = `20${digits.slice(4, 6)}`;
+    }
+    // MMDDYYYY -> MM/DD/YYYY
+    else if (digits.length === 8) {
+      month = digits.slice(0, 2);
+      day = digits.slice(2, 4);
+      year = digits.slice(4, 8);
     } else {
       return raw;
     }
   }
 
-  if (yyyy.length === 2) {
-    yyyy = `20${yyyy}`;
+  if (year.length === 2) {
+    year = `20${year}`;
   }
 
-  const monthNumber = parseInt(mm, 10);
-  const dayNumber = parseInt(dd, 10);
-  const year = String(yyyy || '').replace(/\D/g, '');
+  const monthNumber = parseInt(month, 10);
+  const dayNumber = parseInt(day, 10);
+  const cleanYear = String(year || '').replace(/\D/g, '');
 
   if (
     Number.isNaN(monthNumber) ||
     Number.isNaN(dayNumber) ||
-    year.length !== 4
+    monthNumber < 1 ||
+    monthNumber > 12 ||
+    dayNumber < 1 ||
+    dayNumber > 31 ||
+    cleanYear.length !== 4
+  ) {
+    return raw;
+  }
+
+  // Reject impossible dates such as 02/31/2027.
+  const testDate = new Date(
+    Number(cleanYear),
+    monthNumber - 1,
+    dayNumber
+  );
+
+  if (
+    testDate.getFullYear() !== Number(cleanYear) ||
+    testDate.getMonth() !== monthNumber - 1 ||
+    testDate.getDate() !== dayNumber
   ) {
     return raw;
   }
 
   return `${String(monthNumber).padStart(2, '0')}/${String(
     dayNumber
-  ).padStart(2, '0')}/${year}`;
+  ).padStart(2, '0')}/${cleanYear}`;
 }
 
 function isValidDateCode(value) {
@@ -817,46 +849,55 @@ function buildZebraLabelZpl(label, printer) {
   const workOrder = cleanZplValue(label.workOrder);
 
   const isSystem234 = printer === 'system234';
+
+  // System 1 uses the original 203-dpi size.
+  // Systems 2–4 use the same physical layout scaled for 300 dpi.
   const scale = isSystem234 ? 300 / 203 : 1;
   const dot = (value) => Math.round(value * scale);
 
   const printWidth = isSystem234 ? 1200 : 812;
   const labelLength = isSystem234 ? 2400 : 1624;
-  const labelHomeY = isSystem234 ? dot(120) : 120;
   const barcodeModuleWidth = isSystem234 ? 3 : 2;
+
+  // Compact centered block.
+  const labelX = 72;
+  const valueX = 220;
 
   return `^XA
 ^CI28
-~SD15
-^PR6
-^MTT
-^MNY
-^MMT
 ^PW${printWidth}
 ^LL${labelLength}
-^LH0,${labelHomeY}
-^FO${dot(70)},${dot(70)}^A0N,${dot(30)},${dot(30)}^FDITEM#:^FS
-^FO${dot(230)},${dot(45)}^BY${barcodeModuleWidth},2,${dot(70)}^BCN,${dot(70)},N,N,N^FD${item}^FS
-^FO${dot(230)},${dot(122)}^A0N,${dot(44)},${dot(44)}^FD${item}^FS
-^FO${dot(70)},${dot(250)}^A0N,${dot(30)},${dot(30)}^FDQTY:^FS
-^FO${dot(230)},${dot(220)}^BY${barcodeModuleWidth},2,${dot(60)}^BCN,${dot(60)},N,N,N^FD${qty}^FS
-^FO${dot(230)},${dot(292)}^A0N,${dot(44)},${dot(44)}^FD${qty}^FS
-^FO${dot(70)},${dot(420)}^A0N,${dot(30)},${dot(30)}^FDLOT:^FS
-^FO${dot(230)},${dot(390)}^BY${barcodeModuleWidth},2,${dot(70)}^BCN,${dot(70)},N,N,N^FD${lot}^FS
-^FO${dot(230)},${dot(468)}^A0N,${dot(44)},${dot(44)}^FD${lot}^FS
-^FO${dot(70)},${dot(600)}^A0N,${dot(28)},${dot(28)}^FDDATE^FS
-^FO${dot(70)},${dot(630)}^A0N,${dot(28)},${dot(28)}^FDCODE:^FS
-^FO${dot(230)},${dot(585)}^BY${barcodeModuleWidth},2,${dot(70)}^BCN,${dot(70)},N,N,N^FD${dateCode}^FS
-^FO${dot(230)},${dot(665)}^A0N,${dot(44)},${dot(44)}^FD${dateCode}^FS
-^FO${dot(70)},${dot(820)}^A0N,${dot(30)},${dot(30)}^FDLIC#:^FS
-^FO${dot(230)},${dot(790)}^BY${barcodeModuleWidth},2,${dot(75)}^BCN,${dot(75)},N,N,N^FD${lic}^FS
-^FO${dot(230)},${dot(875)}^A0N,${dot(42)},${dot(42)}^FD${lic}^FS
-^FO${dot(70)},${dot(1020)}^A0N,${dot(30)},${dot(30)}^FDSITE:^FS
-^FO${dot(230)},${dot(990)}^BY${barcodeModuleWidth},2,${dot(65)}^BCN,${dot(65)},N,N,N^FD${site}^FS
-^FO${dot(230)},${dot(1065)}^A0N,${dot(38)},${dot(38)}^FD${site}^FS
-^FO${dot(70)},${dot(1200)}^A0N,${dot(30)},${dot(30)}^FDWO:^FS
-^FO${dot(230)},${dot(1170)}^BY${barcodeModuleWidth},2,${dot(70)}^BCN,${dot(70)},N,N,N^FD${workOrder}^FS
-^FO${dot(230)},${dot(1250)}^A0N,${dot(38)},${dot(38)}^FD${workOrder}^FS
+^LH0,${dot(105)}
+
+^FO${dot(labelX)},${dot(35)}^A0N,${dot(30)},${dot(30)}^FDITEM#:^FS
+^FO${dot(valueX)},${dot(8)}^BY${barcodeModuleWidth},2,${dot(62)}^BCN,${dot(62)},N,N,N^FD${item}^FS
+^FO${dot(valueX)},${dot(76)}^A0N,${dot(42)},${dot(42)}^FD${item}^FS
+
+^FO${dot(labelX)},${dot(205)}^A0N,${dot(30)},${dot(30)}^FDQTY:^FS
+^FO${dot(valueX)},${dot(178)}^BY${barcodeModuleWidth},2,${dot(56)}^BCN,${dot(56)},N,N,N^FD${qty}^FS
+^FO${dot(valueX)},${dot(242)}^A0N,${dot(42)},${dot(42)}^FD${qty}^FS
+
+^FO${dot(labelX)},${dot(365)}^A0N,${dot(30)},${dot(30)}^FDLOT:^FS
+^FO${dot(valueX)},${dot(338)}^BY${barcodeModuleWidth},2,${dot(62)}^BCN,${dot(62)},N,N,N^FD${lot}^FS
+^FO${dot(valueX)},${dot(406)}^A0N,${dot(42)},${dot(42)}^FD${lot}^FS
+
+^FO${dot(labelX)},${dot(525)}^A0N,${dot(27)},${dot(27)}^FDDATE^FS
+^FO${dot(labelX)},${dot(554)}^A0N,${dot(27)},${dot(27)}^FDCODE:^FS
+^FO${dot(valueX)},${dot(505)}^BY${barcodeModuleWidth},2,${dot(62)}^BCN,${dot(62)},N,N,N^FD${dateCode}^FS
+^FO${dot(valueX)},${dot(575)}^A0N,${dot(42)},${dot(42)}^FD${dateCode}^FS
+
+^FO${dot(labelX)},${dot(715)}^A0N,${dot(30)},${dot(30)}^FDLIC#:^FS
+^FO${dot(valueX)},${dot(686)}^BY${barcodeModuleWidth},2,${dot(68)}^BCN,${dot(68)},N,N,N^FD${lic}^FS
+^FO${dot(valueX)},${dot(762)}^A0N,${dot(40)},${dot(40)}^FD${lic}^FS
+
+^FO${dot(labelX)},${dot(905)}^A0N,${dot(30)},${dot(30)}^FDSITE:^FS
+^FO${dot(valueX)},${dot(878)}^BY${barcodeModuleWidth},2,${dot(58)}^BCN,${dot(58)},N,N,N^FD${site}^FS
+^FO${dot(valueX)},${dot(944)}^A0N,${dot(36)},${dot(36)}^FD${site}^FS
+
+^FO${dot(labelX)},${dot(1070)}^A0N,${dot(30)},${dot(30)}^FDWO:^FS
+^FO${dot(valueX)},${dot(1042)}^BY${barcodeModuleWidth},2,${dot(62)}^BCN,${dot(62)},N,N,N^FD${workOrder}^FS
+^FO${dot(valueX)},${dot(1112)}^A0N,${dot(36)},${dot(36)}^FD${workOrder}^FS
+
 ^XZ`;
 }
 
