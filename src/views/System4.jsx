@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { BarChart3, CalendarClock, PackageOpen} from 'lucide-react';
+import { BarChart3, CalendarClock, PackageOpen, ClipboardCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import System4Inventory from '../components/System4Inventory';
 
+import LabelModule from '../components/labels/LabelModule';
 const SYSTEM_NAME = 'system4';
 const SYSTEM_LABEL = 'System 4';
 const SYSTEM_CODE = 'S4';
@@ -279,6 +280,11 @@ const calculateExpiration = (e) => {
 
 const homeModulesInfo = [
     {
+      title: 'Labels',
+      desc: 'Auto and manual pallet labels.',
+      icon: <ClipboardCheck size={24} />
+    },
+    {
       title: 'Inventory',
       desc: 'Plastic and zipper inventory count.',
       icon: <PackageOpen size={24} />
@@ -297,6 +303,7 @@ const homeModulesInfo = [
 
   const tabs = [
     'Home',
+    'Labels',
     'Inventory',
     'Exp. Calc',
     'Run Total',
@@ -848,6 +855,15 @@ const homeModulesInfo = [
                 </div>
               </div>
             </div>
+          )}
+
+          {/* LABELS */}
+          {activeTab === 'Labels' && (
+            <LabelModule
+              systemCode="S4"
+              printer="system234"
+              productNumber={tableData.productNumber || ''}
+            />
           )}
 
         </div>

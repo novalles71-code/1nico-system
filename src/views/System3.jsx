@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { BarChart3, PackageOpen } from 'lucide-react';
+import { BarChart3, PackageOpen, ClipboardCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import PlasticInventorySingleLine from '../components/PlasticInventorySingleLine';
 
+import LabelModule from '../components/labels/LabelModule';
 const SYSTEM_NAME = 'system3';
 const SYSTEM_LABEL = 'System 3';
 const SYSTEM_CODE = 'S3';
@@ -234,6 +235,11 @@ export default function System3() {
 
 const homeModulesInfo = [
     {
+      title: 'Labels',
+      desc: 'Auto and manual pallet labels.',
+      icon: <ClipboardCheck size={24} />
+    },
+    {
       title: 'Run Total',
       desc: 'Weekly production tracking, active weeks, totals, and weekly progress.',
       icon: <BarChart3 size={24} />
@@ -247,6 +253,7 @@ const homeModulesInfo = [
 
   const tabs = [
     'Home',
+    'Labels',
     'Plastic Inventory',
     'Run Total',
     
@@ -721,6 +728,15 @@ const homeModulesInfo = [
                 </div>
               </div>
             </div>
+          )}
+
+          {/* LABELS */}
+          {activeTab === 'Labels' && (
+            <LabelModule
+              systemCode="S3"
+              printer="system234"
+              productNumber={tableData.productNumber || ''}
+            />
           )}
 
         </div>
