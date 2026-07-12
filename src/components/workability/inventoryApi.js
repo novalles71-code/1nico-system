@@ -6,7 +6,7 @@ import {
 } from "./workabilityHelpers";
 import { buildMdlzInventorySearch } from "../mdlz/searchRules";
 
-const INVENTORY_SERVER_URL = "http://10.1.3.70:3001";
+const INVENTORY_SERVER_URL = "http://10.1.1.156:3001";
 
 const buildInventoryItemsWithCustomerRules = (bomComponents, customer) => {
   const customerCode = normalizeKey(customer);

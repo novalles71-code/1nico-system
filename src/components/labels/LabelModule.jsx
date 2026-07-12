@@ -911,7 +911,7 @@ async function sendLabelsToPrinter(labels, printer) {
   }
 
   try {
-    const response = await fetch('http://10.1.3.70:5050/print', {
+    const response = await fetch('http://10.1.1.156:5050/print', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
