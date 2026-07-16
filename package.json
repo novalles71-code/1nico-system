@@ -5,13 +5,13 @@
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "lint": "eslint .",
-  "preview": "vite preview",
-  "electron": "npm run build && electron .",
-  "dist:portable": "npm run build && electron-builder --win portable"
-},
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "electron": "npm run build && electron .",
+    "dist:portable": "npm run build && electron-builder --win portable"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
     "cors": "^2.8.6",

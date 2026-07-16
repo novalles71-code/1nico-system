@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
+import { importThcPdf } from "../components/thc/importThcPdf";
 
 const CUSTOMER_OPTIONS = ["THC", "MDLZ", "BAZOOKA", "MARS"];
 const COMPONENT_TYPES = ["FILM", "CORRUGATE", "FEEDSTOCK", "ZIPPER", "OTHER"];
@@ -15,6 +16,11 @@ const emptyComponentRow = {
   component_options: "",
   inventory_pattern: "",
   selected_option: "",
+  inventory_regex: "",
+  search_mode: "EXACT",
+  requires_shelf_life: false,
+  shelf_life_days: "",
+  minimum_remaining_days: "",
 };
 
 const normalizeText = (value) => String(value || "").trim().toUpperCase();
@@ -81,6 +87,10 @@ export default function WorkabilityAdmin() {
     sku: "",
     description: "",
     active: true,
+    shelf_life_days: null,
+    minimum_remaining_days: null,
+    source_type: null,
+    source_file_name: null,
   });
 
   const [draftComponents, setDraftComponents] = useState([]);
@@ -156,6 +166,11 @@ export default function WorkabilityAdmin() {
     component_options: formatOptionsForEdit(component.component_options),
     inventory_pattern: component.inventory_pattern || "",
     selected_option: component.selected_option || "",
+    inventory_regex: component.inventory_regex || "",
+    search_mode: component.search_mode || "EXACT",
+    requires_shelf_life: component.requires_shelf_life === true,
+    shelf_life_days: component.shelf_life_days ?? "",
+    minimum_remaining_days: component.minimum_remaining_days ?? "",
     _delete: false,
   });
 
@@ -186,7 +201,15 @@ export default function WorkabilityAdmin() {
 
   useEffect(() => {
     setSelectedProduct(null);
-    setDraftProduct({ sku: "", description: "", active: true });
+    setDraftProduct({
+      sku: "",
+      description: "",
+      active: true,
+      shelf_life_days: null,
+      minimum_remaining_days: null,
+      source_type: null,
+      source_file_name: null,
+    });
     setDraftComponents([]);
     setBomSearch("");
     setBomDropdownOpen(false);
@@ -222,6 +245,10 @@ export default function WorkabilityAdmin() {
       sku: product.sku || "",
       description: product.description || "",
       active: product.active !== false,
+      shelf_life_days: product.shelf_life_days ?? null,
+      minimum_remaining_days: product.minimum_remaining_days ?? null,
+      source_type: product.source_type || null,
+      source_file_name: product.source_file_name || null,
     });
     setBomSearch(`${product.sku || ""} - ${product.description || ""}`);
     setBomDropdownOpen(false);
@@ -236,6 +263,10 @@ export default function WorkabilityAdmin() {
       sku: "",
       description: "",
       active: true,
+      shelf_life_days: null,
+      minimum_remaining_days: null,
+      source_type: "MANUAL",
+      source_file_name: null,
     });
     setDraftComponents([{ ...emptyComponentRow }]);
     showMessage("New manual BOM ready.");
@@ -256,6 +287,17 @@ export default function WorkabilityAdmin() {
       component_options: manualOptions || optionsFromSku,
       inventory_pattern: normalizeText(row.inventory_pattern) || null,
       selected_option: normalizeText(row.selected_option) || null,
+      inventory_regex: String(row.inventory_regex || "").trim() || null,
+      search_mode: normalizeText(row.search_mode) || "EXACT",
+      requires_shelf_life: row.requires_shelf_life === true,
+      shelf_life_days:
+        row.shelf_life_days === "" || row.shelf_life_days == null
+          ? null
+          : Number(row.shelf_life_days),
+      minimum_remaining_days:
+        row.minimum_remaining_days === "" || row.minimum_remaining_days == null
+          ? null
+          : Number(row.minimum_remaining_days),
     };
   };
 
@@ -273,6 +315,14 @@ export default function WorkabilityAdmin() {
           component_description: normalizeText(row.component_description) || null,
           uom: normalizeText(row.uom) || null,
           inventory_pattern: normalizeText(row.inventory_pattern) || null,
+          shelf_life_days:
+            row.shelf_life_days === "" || row.shelf_life_days == null
+              ? null
+              : Number(row.shelf_life_days),
+          minimum_remaining_days:
+            row.minimum_remaining_days === "" || row.minimum_remaining_days == null
+              ? null
+              : Number(row.minimum_remaining_days),
           updated_at: new Date().toISOString(),
         };
       });
@@ -316,6 +366,17 @@ export default function WorkabilityAdmin() {
       sku: cleanSku,
       description: cleanDescription,
       active: draftProduct.active !== false,
+      shelf_life_days:
+        draftProduct.shelf_life_days == null || draftProduct.shelf_life_days === ""
+          ? null
+          : Number(draftProduct.shelf_life_days),
+      minimum_remaining_days:
+        draftProduct.minimum_remaining_days == null ||
+        draftProduct.minimum_remaining_days === ""
+          ? null
+          : Number(draftProduct.minimum_remaining_days),
+      source_type: draftProduct.source_type || null,
+      source_file_name: draftProduct.source_file_name || null,
       updated_at: new Date().toISOString(),
     };
 
@@ -376,6 +437,10 @@ export default function WorkabilityAdmin() {
       sku: savedProduct.sku || "",
       description: savedProduct.description || "",
       active: savedProduct.active !== false,
+      shelf_life_days: savedProduct.shelf_life_days ?? null,
+      minimum_remaining_days: savedProduct.minimum_remaining_days ?? null,
+      source_type: savedProduct.source_type || null,
+      source_file_name: savedProduct.source_file_name || null,
     });
 
     await loadComponents(savedProduct.id);
@@ -403,7 +468,15 @@ export default function WorkabilityAdmin() {
     }
 
     setSelectedProduct(null);
-    setDraftProduct({ sku: "", description: "", active: true });
+    setDraftProduct({
+      sku: "",
+      description: "",
+      active: true,
+      shelf_life_days: null,
+      minimum_remaining_days: null,
+      source_type: null,
+      source_file_name: null,
+    });
     setDraftComponents([]);
     setBomSearch("");
     await loadProducts();
@@ -461,6 +534,37 @@ export default function WorkabilityAdmin() {
     setImporting(true);
 
     try {
+      if (customer === "THC") {
+        const importedBom = await importThcPdf(file);
+
+        const componentsToDraft = importedBom.components.map((component) => ({
+          ...emptyComponentRow,
+          ...component,
+          component_options: formatOptionsForEdit(component.component_options),
+          shelf_life_days: component.shelf_life_days ?? "",
+          minimum_remaining_days: component.minimum_remaining_days ?? "",
+          _delete: false,
+        }));
+
+        setSelectedProduct(null);
+        setDraftProduct({
+          sku: importedBom.sku,
+          description: importedBom.description,
+          active: true,
+          shelf_life_days: importedBom.shelf_life_days ?? null,
+          minimum_remaining_days:
+            importedBom.minimum_remaining_days ?? null,
+          source_type: importedBom.source_type || "PDF",
+          source_file_name: importedBom.source_file_name || file.name,
+        });
+        setDraftComponents(componentsToDraft);
+        setBomSearch(`${importedBom.sku} - ${importedBom.description}`);
+        showMessage(
+          `THC PDF loaded: ${componentsToDraft.length} components. Review and click Save BOM.`
+        );
+        return;
+      }
+
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -470,15 +574,12 @@ export default function WorkabilityAdmin() {
         normalizeText(sheet["B2"]?.v) || normalizeText(sheet["C5"]?.v);
 
       if (!bomSku || !bomDescription) {
-        alert(
-          "Unable to read SKU or description.\n\nNew Bazooka format:\nB1 = SKU\nB2 = Description"
+        throw new Error(
+          "Unable to read SKU or description. New format: B1 = SKU and B2 = Description."
         );
-        setImporting(false);
-        return;
       }
 
       const componentsToDraft = [];
-
       const isSimpleFormat =
         normalizeText(sheet["A4"]?.v).includes("COMPONENT") &&
         normalizeText(sheet["B4"]?.v).includes("QUANTITY");
@@ -495,10 +596,10 @@ export default function WorkabilityAdmin() {
 
           componentsToDraft.push({
             ...emptyComponentRow,
-            type: "OTHER",
             component_sku: primary,
             qty_per_case: qtyPerCaseValue,
             component_options: options ? options.join(", ") : "",
+            inventory_pattern: primary,
           });
         }
       } else {
@@ -521,14 +622,13 @@ export default function WorkabilityAdmin() {
             qty_per_case: qtyPerCaseValue,
             uom: uomValue,
             component_options: options ? options.join(", ") : "",
+            inventory_pattern: primary,
           });
         }
       }
 
       if (componentsToDraft.length === 0) {
-        alert("No BOM components found.");
-        setImporting(false);
-        return;
+        throw new Error("No BOM components found in the Excel file.");
       }
 
       setSelectedProduct(null);
@@ -536,16 +636,22 @@ export default function WorkabilityAdmin() {
         sku: bomSku,
         description: bomDescription,
         active: true,
+        shelf_life_days: null,
+        minimum_remaining_days: null,
+        source_type: "EXCEL",
+        source_file_name: file.name,
       });
       setDraftComponents(componentsToDraft);
       setBomSearch(`${bomSku} - ${bomDescription}`);
-      showMessage(`BOM loaded from Excel. Review and click Save BOM.`);
+      showMessage(
+        `Excel BOM loaded: ${componentsToDraft.length} components. Review and click Save BOM.`
+      );
     } catch (error) {
       console.error("BOM import error:", error);
-      alert("Unable to import BOM file.");
+      alert(error?.message || "Unable to import BOM file.");
+    } finally {
+      setImporting(false);
     }
-
-    setImporting(false);
   };
 
   const exportBom = () => {
@@ -789,7 +895,7 @@ export default function WorkabilityAdmin() {
               <input
                 id="bom-upload"
                 type="file"
-                accept=".xlsx,.xls"
+                accept={customer === "THC" ? ".pdf,application/pdf" : ".xlsx,.xls"}
                 onChange={handleBomImport}
                 style={{ display: "none" }}
               />
@@ -804,7 +910,7 @@ export default function WorkabilityAdmin() {
                   cursor: importing ? "not-allowed" : "pointer",
                 }}
               >
-                {importing ? "Importing..." : "Import Excel"}
+                {importing ? "Importing..." : "Import BOM"}
               </button>
             </div>
           </div>

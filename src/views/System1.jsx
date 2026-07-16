@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import PlasticInventory from '../components/PlasticInventory';
 
 import LabelModule from '../components/labels/LabelModule';
+import BoxesCode from '../components/coreflex/BoxesCode';
 const SYSTEM_NAME = 'system1';
 const SYSTEM_LABEL = 'System 1';
 const SYSTEM_CODE = 'S1';
@@ -314,12 +315,18 @@ export default function System1() {
       desc: 'Label Format. White Label',
       icon: <ClipboardCheck size={24} />
 },
+    {
+      title: 'Boxes Code',
+      desc: 'Generate and preview the CoreFlex box message.',
+      icon: <ClipboardCheck size={24} />
+    },
 
   ];
 
   const tabs = [
     'Home',
     'Labels',
+    'Boxes Code',
     'Plastic Inventory',
     'Exp. Calc',
     'Run Total',
@@ -1199,6 +1206,11 @@ Entonces puedes comenzar a preparar y completar toda la documentación y papeler
               printer="system1"
               productNumber={tableData.productNumber || ''}
             />
+          )}
+
+          {/* BOXES CODE */}
+          {activeTab === 'Boxes Code' && (
+            <BoxesCode systemCode="S1" />
           )}
 
         </div>
