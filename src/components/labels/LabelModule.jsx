@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
+import { supabase } from '../../lib/supabase';
 
 const SHIFT_1_JOBS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M'];
 const SHIFT_2_JOBS = ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'];
@@ -13,16 +14,34 @@ const JOB_CODE_MAP = {
 
 export default function LabelModule({
   systemCode,
-  printer,
-  productNumber = ''
+  printer
 }) {
   const [labelMode, setLabelMode] = useState('auto');
+
+  const skuStorageKey = `1nico-label-sku-${String(systemCode || '').toLowerCase()}`;
+  const stateStorageKey = `1nico-label-state-${String(systemCode || '').toLowerCase()}`;
+  const [products, setProducts] = useState([]);
+  const [skuSearch, setSkuSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [skuDropdownOpen, setSkuDropdownOpen] = useState(false);
+  const [skuHighlightIndex, setSkuHighlightIndex] = useState(0);
+  const skuOptionRefs = useRef([]);
+
+  const [expirationDates, setExpirationDates] = useState([]);
+  const [loadingSkuData, setLoadingSkuData] = useState(true);
+  const [loadingExpDates, setLoadingExpDates] = useState(false);
+  const [inventoryMessage, setInventoryMessage] = useState('');
+  const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
+  const [dateHighlightIndex, setDateHighlightIndex] = useState(0);
+  const dateOptionRefs = useRef([]);
+  const [storageReady, setStorageReady] = useState(false);
 
   const [labelData, setLabelData] = useState({
     shift: '1',
     job: 'A',
     qty: '',
     dateCode: '',
+    startingExpDate: '',
     labelQty: '2',
     palletQty: '1',
     startingPallet: '1'
@@ -41,8 +60,399 @@ export default function LabelModule({
     startingPallet: '1'
   });
 
+  const filteredProducts = useMemo(() => {
+    const search = skuSearch.trim().toLowerCase();
+    if (!search) return [];
+
+    return products.filter((product) =>
+      String(product.sku || '').toLowerCase().includes(search) ||
+      String(product.description || '').toLowerCase().includes(search)
+    );
+  }, [products, skuSearch]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(stateStorageKey) || 'null');
+
+      if (saved) {
+        if (saved.labelMode) setLabelMode(saved.labelMode);
+        if (saved.labelData) {
+          const automaticShift = getAutomaticShift(new Date());
+          const savedShift = saved.labelData.shift;
+
+          setLabelData((previous) => ({
+            ...previous,
+            ...saved.labelData,
+            shift: automaticShift,
+            job:
+              savedShift === automaticShift
+                ? saved.labelData.job
+                : automaticShift === '1'
+                  ? 'A'
+                  : 'N'
+          }));
+        }
+        if (saved.manualLabelData) {
+          setManualLabelData((previous) => ({
+            ...previous,
+            ...saved.manualLabelData
+          }));
+        }
+        if (saved.sku) localStorage.setItem(skuStorageKey, saved.sku);
+      }
+    } catch (error) {
+      console.warn('Unable to restore Label state:', error);
+    } finally {
+      setStorageReady(true);
+    }
+  }, [stateStorageKey, skuStorageKey]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+
+    localStorage.setItem(
+      stateStorageKey,
+      JSON.stringify({
+        labelMode,
+        labelData,
+        manualLabelData,
+        sku: selectedProduct?.sku || localStorage.getItem(skuStorageKey) || ''
+      })
+    );
+  }, [
+    storageReady,
+    stateStorageKey,
+    skuStorageKey,
+    labelMode,
+    labelData,
+    manualLabelData,
+    selectedProduct
+  ]);
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      setLoadingSkuData(true);
+
+      const { data, error } = await supabase
+        .from('workability_products')
+        .select('id, customer, sku, description, active')
+        .eq('customer', 'MDLZ')
+        .eq('active', true)
+        .order('sku', { ascending: true });
+
+      if (error) {
+        console.error('Label SKU load error:', error);
+        setInventoryMessage('Unable to load SKUs from Supabase.');
+        setLoadingSkuData(false);
+        return;
+      }
+
+      const list = data || [];
+      setProducts(list);
+
+      const savedSku = localStorage.getItem(skuStorageKey);
+      const savedProduct = list.find(
+        (product) => String(product.sku) === String(savedSku)
+      );
+
+      if (savedProduct) {
+        setSelectedProduct(savedProduct);
+        setSkuSearch(savedProduct.sku);
+      }
+
+      setLoadingSkuData(false);
+    };
+
+    loadProducts();
+  }, [skuStorageKey]);
+
+  const parseComponentOptions = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return value.split(/[,|]/).map((item) => item.trim()).filter(Boolean);
+      }
+    }
+
+    return [];
+  };
+
+  const getFeedstockItems = (components) => {
+    const feedstocks = (components || []).filter((component) => {
+      const type = String(component.type || '').trim().toUpperCase();
+      const description = String(
+        component.component_description || component.description || ''
+      ).toUpperCase();
+
+      return type === 'FEEDSTOCK' || description.includes('CANDY');
+    });
+
+    return Array.from(
+      new Set(
+        feedstocks.flatMap((component) => [
+          component.component_sku,
+          ...parseComponentOptions(component.component_options)
+        ])
+          .map((item) => String(item || '').trim())
+          .filter(Boolean)
+      )
+    );
+  };
+
+  const loadExpirationDates = async (product) => {
+    if (!product?.id) {
+      setExpirationDates([]);
+      setInventoryMessage('');
+      return;
+    }
+
+    setLoadingExpDates(true);
+    setInventoryMessage('');
+
+    try {
+      const { data: components, error: componentError } = await supabase
+        .from('workability_components')
+        .select('*')
+        .eq('product_id', product.id);
+
+      if (componentError) throw componentError;
+
+      const feedstockItems = getFeedstockItems(components || []);
+
+      if (!feedstockItems.length) {
+        setExpirationDates([]);
+        setInventoryMessage('No FEEDSTOCK component found for this SKU.');
+        return;
+      }
+
+      const response = await fetch('http://10.1.1.156:3001/inventory/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          items: feedstockItems,
+          site: '',
+          includeWip: true,
+          fresh: Date.now()
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || payload.error) {
+        throw new Error(payload.message || 'Inventory Server error.');
+      }
+
+      const uniqueDates = new Map();
+
+      (payload.items || []).forEach((item) => {
+        (item.lots || []).forEach((row) => {
+          const parsed = parseInventoryDate(row.ExpirationDate);
+          const onHand = Number(row.OnHandQuantity || 0);
+
+          if (!parsed || onHand <= 0) return;
+
+          const key = toDateKey(parsed);
+          if (!uniqueDates.has(key)) uniqueDates.set(key, parsed);
+        });
+      });
+
+      const sortedDates = Array.from(uniqueDates.values())
+        .sort((a, b) => a.getTime() - b.getTime())
+        .map(formatDateForLabel);
+
+      setExpirationDates(sortedDates);
+
+      if (!sortedDates.length) {
+        setInventoryMessage('No expiration dates with available inventory.');
+        return;
+      }
+
+      // Keep the operator's selected date. Inventory is refreshed on every reload.
+      // If no date has been selected yet, start with the oldest available date.
+      setLabelData((previous) => {
+        if (previous.dateCode) return previous;
+        return {
+          ...previous,
+          startingExpDate: sortedDates[0],
+          dateCode: sortedDates[0]
+        };
+      });
+    } catch (error) {
+      console.error('Label expiration load error:', error);
+      setExpirationDates([]);
+      setInventoryMessage(error.message || 'Unable to load Inventory dates.');
+    } finally {
+      setLoadingExpDates(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedProduct) loadExpirationDates(selectedProduct);
+  }, [selectedProduct]);
+
+
+  const selectSku = (product) => {
+    setSelectedProduct(product);
+    setSkuSearch(product.sku);
+    setSkuDropdownOpen(false);
+    setSkuHighlightIndex(0);
+    localStorage.setItem(skuStorageKey, product.sku);
+    setLabelData((previous) => ({
+      ...previous,
+      startingExpDate: '',
+      dateCode: ''
+    }));
+  };
+
+  const handleSkuInputChange = (value) => {
+    setSkuSearch(value.toUpperCase());
+    setSkuDropdownOpen(Boolean(value.trim()));
+
+    if (selectedProduct && value !== selectedProduct.sku) {
+      setSelectedProduct(null);
+      setExpirationDates([]);
+      setLabelData((previous) => ({
+        ...previous,
+        startingExpDate: '',
+        dateCode: ''
+      }));
+    }
+  };
+
+  const handleSkuBlur = () => {
+    window.setTimeout(() => {
+      setSkuDropdownOpen(false);
+
+      if (selectedProduct) {
+        setSkuSearch(selectedProduct.sku);
+      } else {
+        setSkuSearch('');
+      }
+    }, 150);
+  };
+
+  const handleSkuKeyDown = (event) => {
+    if (!skuDropdownOpen || !filteredProducts.length) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setSkuHighlightIndex((index) =>
+        index >= filteredProducts.length - 1 ? 0 : index + 1
+      );
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setSkuHighlightIndex((index) =>
+        index <= 0 ? filteredProducts.length - 1 : index - 1
+      );
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const product =
+        filteredProducts[skuHighlightIndex] || filteredProducts[0];
+      if (product) selectSku(product);
+    }
+  };
+
+  useEffect(() => {
+    skuOptionRefs.current[skuHighlightIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [skuHighlightIndex]);
+
   const availableJobs =
     labelData.shift === '1' ? SHIFT_1_JOBS : SHIFT_2_JOBS;
+
+
+  useEffect(() => {
+    if (!storageReady) return undefined;
+
+    const applyAutomaticShift = () => {
+      const automaticShift = getAutomaticShift(new Date());
+
+      setLabelData((previous) => {
+        if (previous.shift === automaticShift) return previous;
+
+        return {
+          ...previous,
+          shift: automaticShift,
+          job: automaticShift === '1' ? 'A' : 'N'
+        };
+      });
+    };
+
+    applyAutomaticShift();
+    const timer = window.setInterval(applyAutomaticShift, 1000);
+    return () => window.clearInterval(timer);
+  }, [storageReady]);
+
+  const calculatedExpDate = labelData.dateCode || '';
+
+  const handleExpirationDateChange = (value) => {
+    setLabelData((previous) => ({
+      ...previous,
+      startingExpDate: value,
+      dateCode: value
+    }));
+    setDateDropdownOpen(false);
+  };
+
+  const getNextDateAfter = (date) => {
+    if (!expirationDates.length) return date || '';
+
+    const currentIndex = expirationDates.indexOf(date);
+    if (currentIndex < 0) return expirationDates[0];
+
+    return expirationDates[currentIndex + 1] || date;
+  };
+
+  const handleJobChange = (nextJob) => {
+    const nextDate = getNextDateAfter(labelData.dateCode);
+
+    setLabelData((previous) => ({
+      ...previous,
+      job: nextJob,
+      startingExpDate: nextDate,
+      dateCode: nextDate
+    }));
+  };
+
+  useEffect(() => {
+    dateOptionRefs.current[dateHighlightIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [dateHighlightIndex]);
+
+  const handleDateKeyDown = (event) => {
+    if (!expirationDates.length) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setDateDropdownOpen(true);
+      setDateHighlightIndex((index) =>
+        index >= expirationDates.length - 1 ? 0 : index + 1
+      );
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setDateDropdownOpen(true);
+      setDateHighlightIndex((index) =>
+        index <= 0 ? expirationDates.length - 1 : index - 1
+      );
+    }
+
+    if (event.key === 'Enter' && dateDropdownOpen) {
+      event.preventDefault();
+      handleExpirationDateChange(expirationDates[dateHighlightIndex] || '');
+    }
+
+    if (event.key === 'Escape') setDateDropdownOpen(false);
+  };
 
   useEffect(() => {
     setLabelData((previous) => {
@@ -87,7 +497,7 @@ export default function LabelModule({
           id: `auto-${palletNumber}-${copyIndex + 1}`,
           palletNumber,
           copyNumber: copyIndex + 1,
-          item: productNumber,
+          item: selectedProduct?.sku || '',
           qty: labelData.qty,
           lot: generatedLot,
           dateCode: labelData.dateCode,
@@ -109,7 +519,7 @@ export default function LabelModule({
     labelData.palletQty,
     labelData.qty,
     labelData.startingPallet,
-    productNumber
+    selectedProduct
   ]);
 
   const generatedManualLabels = useMemo(() => {
@@ -158,11 +568,13 @@ export default function LabelModule({
           }
 
           try {
+            const barcodeField = element.getAttribute('data-barcode-field');
+
             JsBarcode(element, value, {
               format: 'CODE128',
               displayValue: false,
               height: 42,
-              width: 1.45,
+              width: barcodeField === 'item' ? 2 : 1.45,
               margin: 0
             });
           } catch (error) {
@@ -175,6 +587,20 @@ export default function LabelModule({
   }, [labelMode, generatedLabels, generatedManualLabels]);
 
   const updateAuto = (field, value) => {
+    if (field === 'job') {
+      handleJobChange(value);
+      return;
+    }
+
+    if (field === 'shift') {
+      setLabelData((previous) => ({
+        ...previous,
+        shift: value,
+        job: value === '1' ? 'A' : 'N'
+      }));
+      return;
+    }
+
     setLabelData((previous) => ({ ...previous, [field]: value }));
   };
 
@@ -183,8 +609,13 @@ export default function LabelModule({
   };
 
   const printAutoLabels = async () => {
-    if (!productNumber.trim()) {
-      alert('Item# is empty. Enter the product number in Run Total first.');
+    if (!selectedProduct?.sku) {
+      alert('Select a valid SKU from the database before printing.');
+      return;
+    }
+
+    if (!labelData.dateCode) {
+      alert('Select a valid expiration date for this Job before printing.');
       return;
     }
 
@@ -196,7 +627,7 @@ export default function LabelModule({
     const finalDateCode = formatDateCodeInput(labelData.dateCode);
 
     if (!isValidDateCode(finalDateCode)) {
-      alert('Date Code must use M/D/YYYY format.');
+      alert('Date Code must use MM/DD/YYYY format.');
       return;
     }
 
@@ -209,8 +640,7 @@ export default function LabelModule({
 
     setLabelData((previous) => ({
       ...previous,
-      qty: '',
-      dateCode: ''
+      qty: ''
     }));
   };
 
@@ -228,7 +658,7 @@ export default function LabelModule({
     }
 
     if (firstLabel.dateCode && !isValidDateCode(firstLabel.dateCode)) {
-      alert('Date Code must use M/D/YYYY format.');
+      alert('Date Code must use MM/DD/YYYY format.');
       return;
     }
 
@@ -263,12 +693,154 @@ export default function LabelModule({
           color: white;
         }
 
+        .label-sku-dropdown {
+          position: absolute;
+          z-index: 50;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          max-height: 260px;
+          overflow-y: auto;
+          background: #fff;
+          border: 1px solid #94a3b8;
+          border-radius: 8px;
+          box-shadow: 0 12px 24px rgba(15,23,42,0.18);
+        }
+
+        .label-sku-option {
+          width: 100%;
+          border: none;
+          border-bottom: 1px solid #e2e8f0;
+          background: #fff;
+          padding: 9px 10px;
+          text-align: left;
+          cursor: pointer;
+          display: grid;
+          gap: 2px;
+        }
+
+        .label-sku-option.highlighted,
+        .label-sku-option:hover {
+          background: #fee2e2;
+        }
+
+        .label-sku-option strong {
+          color: #0f172a;
+          font-size: 0.88rem;
+        }
+
+        .label-sku-option span {
+          color: #64748b;
+          font-size: 0.75rem;
+        }
+
+        .label-sku-description {
+          margin-top: -6px;
+          padding: 9px 10px;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          color: #475569;
+          font-size: 0.76rem;
+          font-weight: 800;
+        }
+
+        .label-inventory-message,
+        .label-inventory-error {
+          border-radius: 8px;
+          padding: 9px 10px;
+          font-size: 0.78rem;
+          font-weight: 900;
+          line-height: 1.35;
+        }
+
+        .label-inventory-message {
+          background: #eff6ff;
+          border: 1px solid #93c5fd;
+          color: #1e40af;
+        }
+
+
+        .label-inventory-error {
+          background: #fee2e2;
+          border: 1px solid #f87171;
+          color: #991b1b;
+        }
+
+
         .label-workspace {
           display: flex;
           justify-content: center;
           align-items: flex-start;
           gap: 24px;
           flex-wrap: wrap;
+        }
+
+        .label-date-picker {
+          position: relative;
+        }
+
+        .label-date-button {
+          width: 100%;
+          height: 38px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border: 1px solid #94a3b8;
+          border-radius: 8px;
+          padding: 6px 10px;
+          background: #fff;
+          color: #0f172a;
+          font-size: 0.95rem;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .label-date-menu {
+          position: absolute;
+          z-index: 80;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          max-height: 220px;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          border: 1px solid #94a3b8;
+          border-radius: 8px;
+          background: #fff;
+          box-shadow: 0 12px 26px rgba(15,23,42,0.18);
+        }
+
+        .label-date-option {
+          width: 100%;
+          border: 0;
+          border-bottom: 1px solid #e2e8f0;
+          padding: 9px 12px;
+          text-align: left;
+          font-size: 0.94rem;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .label-date-option {
+          background: #fff;
+          color: #0f172a;
+        }
+
+        .label-date-option:hover {
+          background: #eff6ff;
+        }
+
+        .label-date-option.highlighted {
+          outline: 2px solid #2563eb;
+          outline-offset: -2px;
+        }
+
+        .label-date-empty {
+          padding: 12px;
+          color: #64748b;
+          font-weight: 800;
+          text-align: center;
         }
 
         @media (max-width: 620px) {
@@ -304,6 +876,56 @@ export default function LabelModule({
         >
           {labelMode === 'auto' ? (
             <>
+              <div style={{ position: 'relative' }}>
+                <CompactControl label="SKU">
+                  <input
+                    value={skuSearch}
+                    onChange={(event) => handleSkuInputChange(event.target.value)}
+                    onFocus={() => {
+                      if (!selectedProduct && skuSearch.trim()) {
+                        setSkuDropdownOpen(true);
+                      }
+                    }}
+                    onBlur={handleSkuBlur}
+                    onKeyDown={handleSkuKeyDown}
+                    placeholder={loadingSkuData ? 'Loading SKUs...' : 'Type or select SKU'}
+                    autoComplete="off"
+                    style={compactInput}
+                  />
+                </CompactControl>
+
+                {skuDropdownOpen &&
+                  !selectedProduct &&
+                  skuSearch.trim() &&
+                  filteredProducts.length > 0 && (
+                  <div className="label-sku-dropdown">
+                    {filteredProducts.slice(0, 30).map((product, index) => (
+                      <button
+                        key={product.id}
+                        ref={(element) => {
+                          skuOptionRefs.current[index] = element;
+                        }}
+                        type="button"
+                        className={`label-sku-option ${
+                          index === skuHighlightIndex ? 'highlighted' : ''
+                        }`}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectSku(product)}
+                      >
+                        <strong>{product.sku}</strong>
+                        <span>{product.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {selectedProduct?.description && (
+                <div className="label-sku-description">
+                  {selectedProduct.description}
+                </div>
+              )}
+
               <CompactControl label="Shift">
                 <select
                   value={labelData.shift}
@@ -328,6 +950,59 @@ export default function LabelModule({
                   ))}
                 </select>
               </CompactControl>
+
+              <CompactControl label="Exp. Date">
+                <div className="label-date-picker">
+                  <button
+                    type="button"
+                    className="label-date-button"
+                    onClick={() => {
+                      if (!selectedProduct || loadingExpDates) return;
+                      const selectedIndex = expirationDates.indexOf(calculatedExpDate);
+                      setDateHighlightIndex(selectedIndex >= 0 ? selectedIndex : 0);
+                      setDateDropdownOpen((previous) => !previous);
+                    }}
+                    onKeyDown={handleDateKeyDown}
+                  >
+                    <span>
+                      {loadingExpDates
+                        ? 'Loading fresh inventory...'
+                        : calculatedExpDate || 'Select expiration date'}
+                    </span>
+                    <span>▼</span>
+                  </button>
+
+                  {dateDropdownOpen && (
+                    <div className="label-date-menu" role="listbox">
+                      {expirationDates.length === 0 ? (
+                        <div className="label-date-empty">No dates available</div>
+                      ) : (
+                        expirationDates.map((date, index) => (
+                          <button
+                            key={date}
+                            ref={(element) => {
+                              dateOptionRefs.current[index] = element;
+                            }}
+                            type="button"
+                            className={`label-date-option ${
+                              index === dateHighlightIndex ? 'highlighted' : ''
+                            }`}
+                            onMouseEnter={() => setDateHighlightIndex(index)}
+                            onClick={() => handleExpirationDateChange(date)}
+                          >
+                            {date}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CompactControl>
+
+              {inventoryMessage && (
+                <div className="label-inventory-message">{inventoryMessage}</div>
+              )}
+
 
               <QuantityControls data={labelData} onChange={updateAuto} />
             </>
@@ -375,7 +1050,7 @@ export default function LabelModule({
                 label={previewLabel}
                 editableFields={{
                   qty: true,
-                  dateCode: true
+                  dateCode: false
                 }}
                 onChange={updateAuto}
                 data={labelData}
@@ -633,7 +1308,7 @@ function PreviewRow({
           width: '100%'
         }}
       >
-        <BarcodeSvg value={displayedBarcodeValue} />
+        <BarcodeSvg value={displayedBarcodeValue} field={field} />
 
         {editable ? (
           <input
@@ -653,7 +1328,7 @@ function PreviewRow({
                 onChange(field, formatDateCodeInput(event.target.value));
               }
             }}
-            placeholder={dateField ? 'M/D/YYYY' : label}
+            placeholder={dateField ? 'MM/DD/YYYY' : label}
             style={previewInput}
           />
         ) : (
@@ -675,11 +1350,12 @@ function PreviewRow({
   );
 }
 
-function BarcodeSvg({ value }) {
+function BarcodeSvg({ value, field }) {
   return (
     <svg
       data-label-barcode="true"
       data-barcode-value={value || ''}
+      data-barcode-field={field || ''}
       style={{
         display: 'block',
         width: 'auto',
@@ -692,11 +1368,48 @@ function BarcodeSvg({ value }) {
   );
 }
 
+
+function parseInventoryDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+
+  const text = String(value).trim();
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+
+  const us = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (us) return new Date(Number(us[3]), Number(us[1]) - 1, Number(us[2]));
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function toDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
+}
+
+function formatDateForLabel(date) {
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(
+    date.getDate()
+  ).padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+
+function getAutomaticShift(date = new Date()) {
+  const minutes = date.getHours() * 60 + date.getMinutes();
+
+  // Shift 2 starts at 6:01 PM and remains active through 6:00 AM.
+  return minutes >= 18 * 60 + 1 || minutes < 6 * 60 + 1 ? '2' : '1';
+}
+
 function getProductionDate() {
   const productionDate = new Date();
+  const minutes = productionDate.getHours() * 60 + productionDate.getMinutes();
 
-  // A night-shift label remains on the prior production date until 6:00 AM.
-  if (productionDate.getHours() < 6) {
+  // The night shift belongs to the prior production date through 6:00 AM.
+  if (minutes < 6 * 60 + 1) {
     productionDate.setDate(productionDate.getDate() - 1);
   }
 
@@ -704,10 +1417,12 @@ function getProductionDate() {
 }
 
 function getJulianDay(date) {
-  const start = new Date(date.getFullYear(), 0, 0);
-  const difference = date - start;
+  const year = date.getFullYear();
+  const currentUtc = Date.UTC(year, date.getMonth(), date.getDate());
+  const startUtc = Date.UTC(year, 0, 0);
+  const julianDay = Math.floor((currentUtc - startUtc) / 86400000);
 
-  return String(Math.floor(difference / 86400000)).padStart(3, '0');
+  return String(julianDay).padStart(3, '0');
 }
 
 function getDateParts(date) {
