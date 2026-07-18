@@ -236,7 +236,7 @@ export default function LabelModule({
         cache: 'no-store',
         body: JSON.stringify({
           items: feedstockItems,
-          site: '',
+          site: 'MDLZ8',
           includeWip: true,
           fresh: Date.now()
         })
