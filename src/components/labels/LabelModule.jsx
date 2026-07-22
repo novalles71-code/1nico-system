@@ -12,6 +12,24 @@ const JOB_CODE_MAP = {
   T: 'K', U: 'N', V: 'Q', W: 'T', X: 'W', Y: 'Z'
 };
 
+function toUppercaseValue(value) {
+  return String(value ?? '').toUpperCase();
+}
+
+function buildAutoLabelItem(sku, systemCode) {
+  const cleanSku = toUppercaseValue(sku).trim();
+
+  if (!cleanSku) return '';
+
+  const cleanSystemCode = toUppercaseValue(systemCode).trim();
+
+  if (cleanSystemCode === 'S1' && !cleanSku.endsWith('SFG')) {
+    return `${cleanSku}SFG`;
+  }
+
+  return cleanSku;
+}
+
 export default function LabelModule({
   systemCode,
   printer
@@ -299,10 +317,10 @@ export default function LabelModule({
 
   const selectSku = (product) => {
     setSelectedProduct(product);
-    setSkuSearch(product.sku);
+    setSkuSearch(toUppercaseValue(product.sku));
     setSkuDropdownOpen(false);
     setSkuHighlightIndex(0);
-    localStorage.setItem(skuStorageKey, product.sku);
+    localStorage.setItem(skuStorageKey, toUppercaseValue(product.sku));
     setLabelData((previous) => ({
       ...previous,
       startingExpDate: '',
@@ -358,7 +376,13 @@ export default function LabelModule({
       event.preventDefault();
       const product =
         filteredProducts[skuHighlightIndex] || filteredProducts[0];
-      if (product) selectSku(product);
+      if (product) {
+        selectSku(product);
+
+        window.setTimeout(() => {
+          document.querySelector('[data-label-input="true"]')?.focus();
+        }, 0);
+      }
     }
   };
 
@@ -497,7 +521,7 @@ export default function LabelModule({
           id: `auto-${palletNumber}-${copyIndex + 1}`,
           palletNumber,
           copyNumber: copyIndex + 1,
-          item: selectedProduct?.sku || '',
+          item: buildAutoLabelItem(selectedProduct?.sku, systemCode),
           qty: labelData.qty,
           lot: generatedLot,
           dateCode: labelData.dateCode,
@@ -519,7 +543,8 @@ export default function LabelModule({
     labelData.palletQty,
     labelData.qty,
     labelData.startingPallet,
-    selectedProduct
+    selectedProduct,
+    systemCode
   ]);
 
   const generatedManualLabels = useMemo(() => {
@@ -605,7 +630,13 @@ export default function LabelModule({
   };
 
   const updateManual = (field, value) => {
-    setManualLabelData((previous) => ({ ...previous, [field]: value }));
+    const nextValue =
+      field === 'dateCode' ? value : toUppercaseValue(value);
+
+    setManualLabelData((previous) => ({
+      ...previous,
+      [field]: nextValue
+    }));
   };
 
   const printAutoLabels = async () => {
@@ -1183,7 +1214,31 @@ function EditableLabel({
   data,
   manual = false
 }) {
+  const inputRefs = useRef({});
+  const editableFieldOrder = [
+    'item',
+    'qty',
+    'lot',
+    'dateCode',
+    'lic',
+    'site',
+    'workOrder'
+  ].filter((field) => editableFields[field]);
+
   if (!label) return null;
+
+  const focusNextEditableField = (currentField) => {
+    const currentIndex = editableFieldOrder.indexOf(currentField);
+    const nextField = editableFieldOrder[currentIndex + 1];
+
+    if (nextField) {
+      inputRefs.current[nextField]?.focus();
+      inputRefs.current[nextField]?.select?.();
+      return;
+    }
+
+    inputRefs.current[currentField]?.blur();
+  };
 
   return (
     <div
@@ -1206,6 +1261,10 @@ function EditableLabel({
         value={manual ? data.item : label.item}
         editable={editableFields.item}
         onChange={onChange}
+        inputRef={(element) => {
+          inputRefs.current.item = element;
+        }}
+        onEnter={focusNextEditableField}
         big
       />
 
@@ -1215,6 +1274,10 @@ function EditableLabel({
         value={data.qty}
         editable={editableFields.qty}
         onChange={onChange}
+        inputRef={(element) => {
+          inputRefs.current.qty = element;
+        }}
+        onEnter={focusNextEditableField}
       />
 
       <PreviewRow
@@ -1223,6 +1286,10 @@ function EditableLabel({
         value={manual ? data.lot : label.lot}
         editable={editableFields.lot}
         onChange={onChange}
+        inputRef={(element) => {
+          inputRefs.current.lot = element;
+        }}
+        onEnter={focusNextEditableField}
         big
       />
 
@@ -1232,6 +1299,10 @@ function EditableLabel({
         value={data.dateCode}
         editable={editableFields.dateCode}
         onChange={onChange}
+        inputRef={(element) => {
+          inputRefs.current.dateCode = element;
+        }}
+        onEnter={focusNextEditableField}
         dateField
       />
 
@@ -1242,6 +1313,10 @@ function EditableLabel({
         barcodeValue={label.lic}
         editable={editableFields.lic}
         onChange={onChange}
+        inputRef={(element) => {
+          inputRefs.current.lic = element;
+        }}
+        onEnter={focusNextEditableField}
       />
 
       <PreviewRow
@@ -1250,6 +1325,10 @@ function EditableLabel({
         value={manual ? data.site : label.site}
         editable={editableFields.site}
         onChange={onChange}
+        inputRef={(element) => {
+          inputRefs.current.site = element;
+        }}
+        onEnter={focusNextEditableField}
         small
       />
 
@@ -1259,6 +1338,10 @@ function EditableLabel({
         value={manual ? data.workOrder : label.workOrder}
         editable={editableFields.workOrder}
         onChange={onChange}
+        inputRef={(element) => {
+          inputRefs.current.workOrder = element;
+        }}
+        onEnter={focusNextEditableField}
       />
     </div>
   );
@@ -1271,6 +1354,8 @@ function PreviewRow({
   barcodeValue,
   editable,
   onChange,
+  inputRef,
+  onEnter,
   dateField,
   big,
   small
@@ -1312,6 +1397,8 @@ function PreviewRow({
 
         {editable ? (
           <input
+            ref={inputRef}
+            data-label-input="true"
             value={value}
             onChange={(event) => {
               const nextValue = dateField
@@ -1319,9 +1406,20 @@ function PreviewRow({
                     event.target.value,
                     event.nativeEvent?.inputType
                   )
-                : event.target.value;
+                : toUppercaseValue(event.target.value);
 
               onChange(field, nextValue);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+
+              event.preventDefault();
+
+              if (dateField) {
+                onChange(field, formatDateCodeInput(event.currentTarget.value));
+              }
+
+              onEnter?.(field);
             }}
             onBlur={(event) => {
               if (dateField) {
